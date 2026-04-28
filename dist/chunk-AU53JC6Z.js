@@ -1,10 +1,9 @@
-#!/usr/bin/env node
+import { changelogRegistrySchema } from './chunk-MWID7EK6.js';
 import path2 from 'path';
 import { spawn } from 'child_process';
-import { writeFile, mkdir, readFile } from 'fs/promises';
-import { z } from 'zod';
+import { readFile, mkdir, writeFile } from 'fs/promises';
 
-var DEFAULT_REGISTRY_PATH = "registry.yaml";
+var DEFAULT_REGISTRY_PATH = "changelog.registry.yaml";
 var DEFAULT_MARKDOWN_PATH = "CHANGELOG.md";
 var DEFAULT_JSON_PATH = path2.join("public", "changelog.gen.json");
 function normalizePathForGit(relPath) {
@@ -122,51 +121,6 @@ function sliceCommitsSinceAnchor(firstParentHeadHistory, registeredHashes) {
 function shortHash(hash) {
   return hash.slice(0, 7);
 }
-var refsSchema = z.array(z.string().trim().min(1)).min(1);
-var visibleRegistryEntrySchema = z.object({
-  hide: z.literal(false),
-  refs: refsSchema,
-  descriptionMd: z.string().trim().min(1)
-});
-var hiddenRegistryEntrySchema = z.object({
-  hide: z.literal(true),
-  refs: refsSchema,
-  descriptionMd: z.never().optional()
-});
-var changelogRegistryEntrySchema = z.discriminatedUnion("hide", [
-  visibleRegistryEntrySchema,
-  hiddenRegistryEntrySchema
-]);
-var changelogRegistryEntryInputSchema = z.object({
-  hide: z.boolean().optional(),
-  refs: refsSchema,
-  descriptionMd: z.string().optional()
-}).transform((entry) => ({
-  hide: entry.hide ?? false,
-  refs: entry.refs,
-  descriptionMd: entry.descriptionMd
-})).pipe(changelogRegistryEntrySchema);
-var changelogRegistrySchema = z.object({
-  entries: z.array(changelogRegistryEntryInputSchema)
-});
-var changelogEntrySchema = z.object({
-  refs: z.array(z.string().min(1)).min(1),
-  refsDisplay: z.array(z.string().min(1)).min(1),
-  descriptionMd: z.string().min(1),
-  committedAtIso: z.string().min(1),
-  committedAtShort: z.string().min(1)
-});
-z.object({
-  generatedAt: z.string().min(1),
-  months: z.array(
-    z.object({
-      month: z.string().regex(/^\d{4}-\d{2}$/),
-      entries: z.array(changelogEntrySchema)
-    })
-  )
-});
-
-// src/core/registry.ts
 async function readRegistry(projectRoot, config) {
   const resolved = config ?? resolveConfig();
   const abs = path2.join(projectRoot, resolved.registryPath);
@@ -197,8 +151,6 @@ async function writeRegistry(projectRoot, registry, config) {
 `;
   await writeFile(abs, yaml, "utf8");
 }
-
-// src/core/build.ts
 function normalizeMarkdownBody(markdown) {
   return markdown.trim().replace(/\n{3,}/g, "\n\n");
 }
@@ -424,7 +376,10 @@ ${list}`);
   }
   const registeredHashes = new Set(Array.from(byHash.keys()));
   const firstParentHistory = await listFirstParentHeadHistory(projectRoot);
-  const { anchorHash, commitsSinceAnchor } = sliceCommitsSinceAnchor(firstParentHistory, registeredHashes);
+  const { anchorHash, commitsSinceAnchor } = sliceCommitsSinceAnchor(
+    firstParentHistory,
+    registeredHashes
+  );
   const missingCommits = commitsSinceAnchor.filter((hash) => !registeredHashes.has(hash));
   const missingNonChangelogCommits = [];
   let skippedChangelogOnlyCount = 0;
@@ -465,41 +420,6 @@ ${list}`);
   };
 }
 
-// src/cli/args.ts
-function readRawArgs(argv) {
-  const map = /* @__PURE__ */ new Map();
-  for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i];
-    if (!token.startsWith("--")) {
-      continue;
-    }
-    const key = token.slice(2);
-    const next = argv[i + 1];
-    if (!next || next.startsWith("--")) {
-      const list2 = map.get(key) ?? [];
-      list2.push("true");
-      map.set(key, list2);
-      continue;
-    }
-    const list = map.get(key) ?? [];
-    list.push(next);
-    map.set(key, list);
-    i += 1;
-  }
-  return map;
-}
-function parseCliContext(argv) {
-  const args = readRawArgs(argv);
-  const projectRoot = args.get("project-root")?.at(-1) ?? process.cwd();
-  const config = {
-    registryPath: args.get("registry-path")?.at(-1),
-    outputJsonPath: args.get("output-json-path")?.at(-1),
-    outputMarkdownPath: args.get("output-markdown-path")?.at(-1),
-    changelogOnlyPaths: args.get("changelog-only-path")
-  };
-  return { projectRoot, config };
-}
-
-export { buildChangelog, parseCliContext, prefillChangelog, resolveConfig, shortHash, verifyChangelog };
-//# sourceMappingURL=chunk-Q3TKW3RG.js.map
-//# sourceMappingURL=chunk-Q3TKW3RG.js.map
+export { DEFAULT_JSON_PATH, DEFAULT_MARKDOWN_PATH, DEFAULT_REGISTRY_PATH, buildChangelog, isChangelogOnlyCommit, isChangelogOnlyPath, isChangelogOptOutCommit, isChangelogOptOutText, listCommitChangedPaths, listFirstParentHeadHistory, monthKeyFromIsoDate, normalizePathForGit, prefillChangelog, readCommitInfo, readRegistry, resolveCommitRef, resolveConfig, runGit, shortHash, sliceCommitsSinceAnchor, verifyChangelog, writeRegistry };
+//# sourceMappingURL=chunk-AU53JC6Z.js.map
+//# sourceMappingURL=chunk-AU53JC6Z.js.map

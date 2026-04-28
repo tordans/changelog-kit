@@ -13,7 +13,7 @@ type ChangelogKitResolvedConfig = {
     outputJsonPath: string;
     changelogOnlyPaths: Set<string>;
 };
-declare const DEFAULT_REGISTRY_PATH = "registry.yaml";
+declare const DEFAULT_REGISTRY_PATH = "changelog.registry.yaml";
 declare const DEFAULT_MARKDOWN_PATH = "CHANGELOG.md";
 declare const DEFAULT_JSON_PATH: string;
 declare function normalizePathForGit(relPath: string): string;
