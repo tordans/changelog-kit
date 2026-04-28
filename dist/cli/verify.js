@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { parseCliContext, verifyChangelog, shortHash } from '../chunk-SWLM5IYO.js';
+import { parseCliContext, verifyChangelog, shortHash } from '../chunk-VSCIPOQB.js';
 
 // src/cli/verify.ts
 async function main() {

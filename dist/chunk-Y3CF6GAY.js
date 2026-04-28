@@ -334,11 +334,15 @@ async function prefillChangelog(projectRoot, config) {
     anchorHash
   };
 }
-
-// src/core/verify.ts
 async function verifyChangelog(projectRoot, config) {
   const resolvedConfig = resolveConfig(config);
+  const registryAbsPath = path2.join(projectRoot, resolvedConfig.registryPath);
   const registry = await readRegistry(projectRoot, resolvedConfig);
+  const remediation = [
+    `[changelog:verify] Registry file: ${registryAbsPath}`,
+    "[changelog:verify] Next step: bun run changelog:prefill",
+    "[changelog:verify] Then run: bun run changelog:verify"
+  ];
   const resolvedRows = [];
   for (let entryIndex = 0; entryIndex < registry.entries.length; entryIndex += 1) {
     const entry = registry.entries[entryIndex];
@@ -354,8 +358,27 @@ async function verifyChangelog(projectRoot, config) {
   const invalidRefs = resolvedRows.filter((row) => row.resolvedHash === null);
   if (invalidRefs.length > 0) {
     const list = invalidRefs.map((row) => `entry #${row.entryIndex + 1}: ${row.inputRef}`).join("\n");
-    throw new Error(`[changelog:verify] Invalid refs found in changelog registry:
-${list}`);
+    throw new Error(
+      ["[changelog:verify] Invalid refs found in changelog registry:", list, ...remediation].join(
+        "\n"
+      )
+    );
+  }
+  const firstParentHistory = await listFirstParentHeadHistory(projectRoot);
+  const historySet = new Set(firstParentHistory);
+  const staleRows = resolvedRows.filter((row) => {
+    if (!row.resolvedHash) return false;
+    return !historySet.has(row.resolvedHash);
+  });
+  if (staleRows.length > 0) {
+    const list = staleRows.map((row) => `entry #${row.entryIndex + 1}: ${row.inputRef}`).join("\n");
+    throw new Error(
+      [
+        "[changelog:verify] Stale refs found in changelog registry (not in first-parent HEAD history):",
+        list,
+        ...remediation
+      ].join("\n")
+    );
   }
   const byHash = /* @__PURE__ */ new Map();
   for (const row of resolvedRows) {
@@ -371,11 +394,15 @@ ${list}`);
       const locations = rows.map((row) => `entry #${row.entryIndex + 1} (${row.inputRef})`).join(", ");
       return `- ${shortHash(hash)} appears multiple times: ${locations}`;
     }).join("\n");
-    throw new Error(`[changelog:verify] Duplicate commit coverage found:
-${list}`);
+    throw new Error(
+      [
+        "[changelog:verify] Duplicate commit coverage found:",
+        list,
+        `[changelog:verify] Registry file: ${registryAbsPath}`
+      ].join("\n")
+    );
   }
   const registeredHashes = new Set(Array.from(byHash.keys()));
-  const firstParentHistory = await listFirstParentHeadHistory(projectRoot);
   const { anchorHash, commitsSinceAnchor } = sliceCommitsSinceAnchor(
     firstParentHistory,
     registeredHashes
@@ -407,7 +434,8 @@ ${list}`);
       [
         "[changelog:verify] Missing commits in changelog registry:",
         ...commits.map((line) => `- ${line}`),
-        anchorLine
+        anchorLine,
+        ...remediation
       ].join("\n")
     );
   }
@@ -421,5 +449,5 @@ ${list}`);
 }
 
 export { DEFAULT_JSON_PATH, DEFAULT_MARKDOWN_PATH, DEFAULT_REGISTRY_PATH, buildChangelog, isChangelogOnlyCommit, isChangelogOnlyPath, isChangelogOptOutCommit, isChangelogOptOutText, listCommitChangedPaths, listFirstParentHeadHistory, monthKeyFromIsoDate, normalizePathForGit, prefillChangelog, readCommitInfo, readRegistry, resolveCommitRef, resolveConfig, runGit, shortHash, sliceCommitsSinceAnchor, verifyChangelog, writeRegistry };
-//# sourceMappingURL=chunk-AU53JC6Z.js.map
-//# sourceMappingURL=chunk-AU53JC6Z.js.map
+//# sourceMappingURL=chunk-Y3CF6GAY.js.map
+//# sourceMappingURL=chunk-Y3CF6GAY.js.map

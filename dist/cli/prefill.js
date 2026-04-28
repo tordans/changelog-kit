@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-import { parseCliContext, prefillChangelog, shortHash } from '../chunk-SWLM5IYO.js';
+import { parseCliContext, resolveConfig, prefillChangelog, shortHash } from '../chunk-VSCIPOQB.js';
+import path from 'path';
 
-// src/cli/prefill.ts
 async function main() {
   const { projectRoot, config } = parseCliContext(process.argv.slice(2));
+  const resolved = resolveConfig(config);
+  const registryAbsPath = path.join(projectRoot, resolved.registryPath);
   const result = await prefillChangelog(projectRoot, config);
   if (result.addedEntries.length === 0) {
     console.info("[changelog-kit:prefill] No missing commits. Registry already covers this range.");
@@ -23,6 +25,10 @@ async function main() {
       `[changelog-kit:prefill] Skipped ${result.skippedOptOutCount} commits with changelog opt-out terms (no-changelog / no changelog / hide changelog).`
     );
   }
+  console.info(`[changelog-kit:prefill] Registry file: ${registryAbsPath}`);
+  console.info(
+    "[changelog-kit:prefill] Next step: edit registry entries, then run: bun run changelog"
+  );
 }
 void main().catch((err) => {
   console.error(err instanceof Error ? err.message : String(err));
