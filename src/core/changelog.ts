@@ -8,10 +8,28 @@ export function isChangelogOptOutText(text: string): boolean {
   return CHANGELOG_OPTOUT_PATTERN.test(text)
 }
 
+export function isIgnoredByTerms(text: string, ignoredTerms: string[]): boolean {
+  if (ignoredTerms.length === 0) return false
+  const lower = text.toLowerCase()
+  return ignoredTerms.some((term) => lower.includes(term))
+}
+
 export async function isChangelogOptOutCommit(projectRoot: string, ref: string): Promise<boolean> {
   const commit = await readCommitInfo(projectRoot, ref)
   const combined = `${commit.subject}\n${commit.body}`
   return isChangelogOptOutText(combined)
+}
+
+export async function isIgnoredCommit(
+  projectRoot: string,
+  ref: string,
+  config?: ChangelogKitResolvedConfig,
+): Promise<boolean> {
+  const resolved = config ?? resolveConfig()
+  if (resolved.ignoredCommitTerms.length === 0) return false
+  const commit = await readCommitInfo(projectRoot, ref)
+  const combined = `${commit.subject}\n${commit.body}`
+  return isIgnoredByTerms(combined, resolved.ignoredCommitTerms)
 }
 
 export function isChangelogOnlyPath(relPath: string, config?: ChangelogKitResolvedConfig): boolean {

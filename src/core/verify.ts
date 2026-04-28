@@ -1,6 +1,7 @@
 import path from 'node:path'
 
 import {
+  isIgnoredCommit,
   isChangelogOnlyCommit,
   isChangelogOptOutCommit,
   shortHash,
@@ -20,6 +21,7 @@ type ResolvedRefRow = {
 export type VerifyResult = {
   checkedNonChangelogCount: number
   skippedChangelogOnlyCount: number
+  skippedIgnoredCount: number
   skippedOptOutCount: number
   anchorHash: string | null
 }
@@ -117,10 +119,15 @@ export async function verifyChangelog(
   const missingCommits = commitsSinceAnchor.filter((hash) => !registeredHashes.has(hash))
   const missingNonChangelogCommits: string[] = []
   let skippedChangelogOnlyCount = 0
+  let skippedIgnoredCount = 0
   let skippedOptOutCount = 0
   for (const hash of missingCommits) {
     if (await isChangelogOnlyCommit(projectRoot, hash, resolvedConfig)) {
       skippedChangelogOnlyCount += 1
+      continue
+    }
+    if (await isIgnoredCommit(projectRoot, hash, resolvedConfig)) {
+      skippedIgnoredCount += 1
       continue
     }
     if (await isChangelogOptOutCommit(projectRoot, hash)) {
@@ -152,8 +159,10 @@ export async function verifyChangelog(
 
   const checkedCount = commitsSinceAnchor.length
   return {
-    checkedNonChangelogCount: checkedCount - skippedChangelogOnlyCount - skippedOptOutCount,
+    checkedNonChangelogCount:
+      checkedCount - skippedChangelogOnlyCount - skippedIgnoredCount - skippedOptOutCount,
     skippedChangelogOnlyCount,
+    skippedIgnoredCount,
     skippedOptOutCount,
     anchorHash,
   }

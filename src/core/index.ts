@@ -8,6 +8,8 @@ export {
   type ChangelogKitResolvedConfig,
 } from './config'
 export {
+  isIgnoredByTerms,
+  isIgnoredCommit,
   isChangelogOnlyCommit,
   isChangelogOnlyPath,
   isChangelogOptOutCommit,

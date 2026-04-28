@@ -18,6 +18,7 @@ The goal is an automated reminder workflow that still leaves full control to the
 - **Review:** inspect the registry and generated files after `bun run changelog`, then adjust entries manually if needed before committing.
 - **LLM:** use the [Shared Agent Skill](#shared-agent-skill) with a prompt like "Update changelog from recent commits, group related commits, and hide non-user-facing work."
 - **Commits:** only user-facing changes belong in the changelog; non-user-facing changelog updates can be opted out with `hide changelog` (also supports `no-changelog` / `no changelog`) in the commit message body.
+- **Custom ignore terms:** pass one or more `--ignore-commit-term` flags to skip recurring commits (for example automated `chore(data):` imports).
 
 ## Install
 
@@ -56,6 +57,9 @@ Shared flags:
   > Default: current working directory
 - `--changelog-only-path <path>` (repeatable)
   Limits git commit scanning to files that affect changelog generation.
+  > Default: not set
+- `--ignore-commit-term <term>` (repeatable)
+  Skips commits whose message contains the given term (case-insensitive).
   > Default: not set
 
 ## Shared Agent Skill

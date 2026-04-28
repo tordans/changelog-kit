@@ -6,12 +6,12 @@ async function main() {
   const result = await verifyChangelog(projectRoot, config)
   if (result.anchorHash) {
     console.info(
-      `[changelog-kit:verify] OK. Checked ${result.checkedNonChangelogCount} commits since ${shortHash(result.anchorHash)} (${result.skippedChangelogOnlyCount} changelog-only commits skipped, ${result.skippedOptOutCount} opt-out commits skipped).`,
+      `[changelog-kit:verify] OK. Checked ${result.checkedNonChangelogCount} commits since ${shortHash(result.anchorHash)} (${result.skippedChangelogOnlyCount} changelog-only commits skipped, ${result.skippedIgnoredCount} ignored commits skipped, ${result.skippedOptOutCount} opt-out commits skipped).`,
     )
     return
   }
   console.info(
-    `[changelog-kit:verify] OK. Checked ${result.checkedNonChangelogCount} commits from HEAD (${result.skippedChangelogOnlyCount} changelog-only commits skipped, ${result.skippedOptOutCount} opt-out commits skipped).`,
+    `[changelog-kit:verify] OK. Checked ${result.checkedNonChangelogCount} commits from HEAD (${result.skippedChangelogOnlyCount} changelog-only commits skipped, ${result.skippedIgnoredCount} ignored commits skipped, ${result.skippedOptOutCount} opt-out commits skipped).`,
   )
 }
 

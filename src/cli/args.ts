@@ -39,6 +39,7 @@ export function parseCliContext(argv: string[]): CliContext {
     outputJsonPath: args.get('output-json-path')?.at(-1),
     outputMarkdownPath: args.get('output-markdown-path')?.at(-1),
     changelogOnlyPaths: args.get('changelog-only-path'),
+    ignoredCommitTerms: args.get('ignore-commit-term'),
   }
 
   return { projectRoot, config }

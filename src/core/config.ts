@@ -5,6 +5,7 @@ export type ChangelogKitConfig = {
   outputMarkdownPath?: string
   outputJsonPath?: string
   changelogOnlyPaths?: string[]
+  ignoredCommitTerms?: string[]
 }
 
 export type ChangelogKitResolvedConfig = {
@@ -12,6 +13,7 @@ export type ChangelogKitResolvedConfig = {
   outputMarkdownPath: string
   outputJsonPath: string
   changelogOnlyPaths: Set<string>
+  ignoredCommitTerms: string[]
 }
 
 export const DEFAULT_REGISTRY_PATH = 'changelog.registry.yaml'
@@ -31,10 +33,18 @@ export function resolveConfig(config?: ChangelogKitConfig): ChangelogKitResolved
       normalizePathForGit,
     ),
   )
+  const ignoredCommitTerms = Array.from(
+    new Set(
+      (config?.ignoredCommitTerms ?? [])
+        .map((term) => term.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  )
   return {
     registryPath,
     outputMarkdownPath,
     outputJsonPath,
     changelogOnlyPaths,
+    ignoredCommitTerms,
   }
 }

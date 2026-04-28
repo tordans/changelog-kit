@@ -1,5 +1,6 @@
 import type { ChangelogRegistryEntry } from '../schemas'
 import {
+  isIgnoredCommit,
   isChangelogOnlyCommit,
   isChangelogOptOutCommit,
   shortHash,
@@ -39,6 +40,7 @@ function draftDescription(subject: string, body: string): string {
 export type PrefillResult = {
   addedEntries: ChangelogRegistryEntry[]
   skippedChangelogOnlyCount: number
+  skippedIgnoredCount: number
   skippedOptOutCount: number
   anchorHash: string | null
 }
@@ -64,11 +66,16 @@ export async function prefillChangelog(
   const orderedMissing = [...missingCommits].reverse()
   const missingNonChangelogCommits: string[] = []
   let skippedChangelogOnlyCount = 0
+  let skippedIgnoredCount = 0
   let skippedOptOutCount = 0
 
   for (const hash of orderedMissing) {
     if (await isChangelogOnlyCommit(projectRoot, hash, resolvedConfig)) {
       skippedChangelogOnlyCount += 1
+      continue
+    }
+    if (await isIgnoredCommit(projectRoot, hash, resolvedConfig)) {
+      skippedIgnoredCount += 1
       continue
     }
     if (await isChangelogOptOutCommit(projectRoot, hash)) {
@@ -106,6 +113,7 @@ export async function prefillChangelog(
   return {
     addedEntries,
     skippedChangelogOnlyCount,
+    skippedIgnoredCount,
     skippedOptOutCount,
     anchorHash,
   }
