@@ -77,7 +77,8 @@ mkdir -p ".cursor/skills/changelog-update" && cp "node_modules/@tordans/changelo
 `ChangelogList` is presentational only. The outer app owns route/page/fetching/loading/error states.
 
 ```tsx
-import { ChangelogList, changelogFileSchema } from '@tordans/changelog-kit'
+import { ChangelogList } from '@tordans/changelog-kit/react'
+import { changelogFileSchema } from '@tordans/changelog-kit/schemas'
 
 const data = changelogFileSchema.parse(await fetch('/changelog.gen.json').then((r) => r.json()))
 
@@ -88,3 +89,4 @@ const data = changelogFileSchema.parse(await fetch('/changelog.gen.json').then((
 />
 ```
 
+Use browser-safe subpath imports (`/react` and `/schemas`) instead of the package root in frontend code to avoid bundling Node-only CLI/core chunks.
