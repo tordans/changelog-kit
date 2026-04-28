@@ -2,16 +2,21 @@
   "name": "@tordans/changelog-kit",
   "version": "0.1.0",
   "description": "Shared changelog scripts and React list component for multi-repo reuse.",
-  "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tordans/changelog-kit.git"
   },
+  "bin": {
+    "changelog-kit-build": "./dist/cli/build.js",
+    "changelog-kit-prefill": "./dist/cli/prefill.js",
+    "changelog-kit-verify": "./dist/cli/verify.js"
+  },
   "files": [
     "dist",
     "README.md"
   ],
+  "type": "module",
   "sideEffects": false,
   "exports": {
     ".": {
@@ -31,28 +36,27 @@
       "import": "./dist/react/index.js"
     }
   },
-  "bin": {
-    "changelog-kit-build": "./dist/cli/build.js",
-    "changelog-kit-verify": "./dist/cli/verify.js",
-    "changelog-kit-prefill": "./dist/cli/prefill.js"
-  },
   "scripts": {
     "build": "tsup",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
-  },
-  "peerDependencies": {
-    "react": ">=18.0.0"
+    "check": "bun run format:check && bun run lint && bun run typecheck",
+    "format": "oxfmt -c oxfmt.config.mjs --write .",
+    "format:check": "oxfmt -c oxfmt.config.mjs --check .",
+    "lint": "oxlint -c oxlint.config.mjs .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "zod": "^3.24.1",
-    "yaml": "^2.8.1"
+    "yaml": "^2.8.1",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "^24.7.2",
     "@types/react": "^19.2.2",
-    "eslint": "^9.37.0",
+    "oxfmt": "^0.47.0",
+    "oxlint": "^1.62.0",
     "tsup": "^8.5.0",
     "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
   }
 }
