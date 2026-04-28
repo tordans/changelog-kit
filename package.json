@@ -1,7 +1,7 @@
 {
   "name": "@tordans/changelog-kit",
   "version": "0.1.0",
-  "description": "Shared changelog scripts and React list component for multi-repo reuse.",
+  "description": "Shared changelog scripts and React list component to manage and generate user facing changelogs.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -44,7 +44,9 @@
     "format": "oxfmt -c oxfmt.config.mjs --write .",
     "format:check": "oxfmt -c oxfmt.config.mjs --check .",
     "lint": "oxlint -c oxlint.config.mjs .",
-    "typecheck": "tsgo --noEmit"
+    "prepare": "husky",
+    "typecheck": "tsgo --noEmit",
+    "verify:dist": "bun run build && git diff --quiet -- dist || (echo 'dist is out of date. Run bun run build and commit dist.' && exit 1)"
   },
   "dependencies": {
     "yaml": "^2.8.1",
@@ -54,6 +56,7 @@
     "@types/node": "^24.7.2",
     "@types/react": "^19.2.2",
     "@typescript/native-preview": "^7.0.0-dev.20260427.1",
+    "husky": "^9.1.7",
     "oxfmt": "^0.47.0",
     "oxlint": "^1.62.0",
     "tsup": "^8.5.0"
