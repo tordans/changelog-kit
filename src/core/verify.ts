@@ -1,3 +1,5 @@
+import path from 'node:path'
+
 import {
   isChangelogOnlyCommit,
   isChangelogOptOutCommit,
@@ -27,7 +29,14 @@ export async function verifyChangelog(
   config?: ChangelogKitConfig,
 ): Promise<VerifyResult> {
   const resolvedConfig = resolveConfig(config)
+  const registryAbsPath = path.join(projectRoot, resolvedConfig.registryPath)
   const registry = await readRegistry(projectRoot, resolvedConfig)
+
+  const remediation = [
+    `[changelog:verify] Registry file: ${registryAbsPath}`,
+    '[changelog:verify] Next step: bun run changelog:prefill',
+    '[changelog:verify] Then run: bun run changelog:verify',
+  ]
 
   const resolvedRows: ResolvedRefRow[] = []
   for (let entryIndex = 0; entryIndex < registry.entries.length; entryIndex += 1) {
@@ -47,7 +56,28 @@ export async function verifyChangelog(
     const list = invalidRefs
       .map((row) => `entry #${row.entryIndex + 1}: ${row.inputRef}`)
       .join('\n')
-    throw new Error(`[changelog:verify] Invalid refs found in changelog registry:\n${list}`)
+    throw new Error(
+      ['[changelog:verify] Invalid refs found in changelog registry:', list, ...remediation].join(
+        '\n',
+      ),
+    )
+  }
+
+  const firstParentHistory = await listFirstParentHeadHistory(projectRoot)
+  const historySet = new Set(firstParentHistory)
+  const staleRows = resolvedRows.filter((row) => {
+    if (!row.resolvedHash) return false
+    return !historySet.has(row.resolvedHash)
+  })
+  if (staleRows.length > 0) {
+    const list = staleRows.map((row) => `entry #${row.entryIndex + 1}: ${row.inputRef}`).join('\n')
+    throw new Error(
+      [
+        '[changelog:verify] Stale refs found in changelog registry (not in first-parent HEAD history):',
+        list,
+        ...remediation,
+      ].join('\n'),
+    )
   }
 
   const byHash = new Map<string, ResolvedRefRow[]>()
@@ -69,11 +99,16 @@ export async function verifyChangelog(
         return `- ${shortHash(hash)} appears multiple times: ${locations}`
       })
       .join('\n')
-    throw new Error(`[changelog:verify] Duplicate commit coverage found:\n${list}`)
+    throw new Error(
+      [
+        '[changelog:verify] Duplicate commit coverage found:',
+        list,
+        `[changelog:verify] Registry file: ${registryAbsPath}`,
+      ].join('\n'),
+    )
   }
 
   const registeredHashes = new Set(Array.from(byHash.keys()))
-  const firstParentHistory = await listFirstParentHeadHistory(projectRoot)
   const { anchorHash, commitsSinceAnchor } = sliceCommitsSinceAnchor(
     firstParentHistory,
     registeredHashes,
@@ -110,6 +145,7 @@ export async function verifyChangelog(
         '[changelog:verify] Missing commits in changelog registry:',
         ...commits.map((line) => `- ${line}`),
         anchorLine,
+        ...remediation,
       ].join('\n'),
     )
   }
