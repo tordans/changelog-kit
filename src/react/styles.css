@@ -1,0 +1,4 @@
+@import 'tailwindcss/theme' source(none);
+@import 'tailwindcss/utilities' source(none);
+
+@source './ChangelogList.tsx';

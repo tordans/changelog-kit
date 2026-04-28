@@ -78,6 +78,7 @@ mkdir -p ".cursor/skills/changelog-update" && cp "node_modules/@tordans/changelo
 
 ```tsx
 import { ChangelogList } from '@tordans/changelog-kit/react'
+import '@tordans/changelog-kit/styles'
 import { changelogFileSchema } from '@tordans/changelog-kit/schemas'
 
 const data = changelogFileSchema.parse(await fetch('/changelog.gen.json').then((r) => r.json()))
@@ -87,6 +88,14 @@ const data = changelogFileSchema.parse(await fetch('/changelog.gen.json').then((
   commitUrl={(ref) => `https://github.com/org/repo/commit/${ref}`}
   labels={{ empty: 'Keine Eintraege.' }}
 />
+```
+
+`@tordans/changelog-kit/styles` ships prebuilt CSS for `ChangelogList`.
+In a Tailwind app, import it once in your global stylesheet (for example `src/index.css`) after `@import 'tailwindcss';`:
+
+```css
+@import 'tailwindcss';
+@import '@tordans/changelog-kit/styles';
 ```
 
 Use browser-safe subpath imports (`/react` and `/schemas`) instead of the package root in frontend code to avoid bundling Node-only CLI/core chunks.

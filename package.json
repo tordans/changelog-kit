@@ -19,7 +19,9 @@
     ".cursor/skills/changelog-update/SKILL.reference.md"
   ],
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "**/*.css"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -36,10 +38,14 @@
     "./react": {
       "types": "./dist/react/index.d.ts",
       "import": "./dist/react/index.js"
+    },
+    "./styles": {
+      "default": "./dist/react/styles.css"
     }
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && bun run build:styles",
+    "build:styles": "tailwindcss -i ./src/react/styles.css -o ./dist/react/styles.css --minify",
     "check": "bun run format:check && bun run lint && bun run typecheck",
     "format": "oxfmt -c oxfmt.config.mjs --write .",
     "format:check": "oxfmt -c oxfmt.config.mjs --check .",
@@ -53,12 +59,14 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@tailwindcss/cli": "^4.2.4",
     "@types/node": "^24.7.2",
     "@types/react": "^19.2.2",
     "@typescript/native-preview": "^7.0.0-dev.20260427.1",
     "husky": "^9.1.7",
     "oxfmt": "^0.47.0",
     "oxlint": "^1.62.0",
+    "tailwindcss": "^4.2.4",
     "tsup": "^8.5.0"
   },
   "peerDependencies": {
