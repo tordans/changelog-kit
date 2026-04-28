@@ -10,7 +10,7 @@ Shared changelog tooling for multiple repositories:
 ## Install
 
 ```bash
-bun add @tordans/changelog-kit
+bun add github:tordans/changelog-kit#main
 ```
 
 For local development from another repo:
@@ -18,7 +18,7 @@ For local development from another repo:
 ```json
 {
   "dependencies": {
-    "@tordans/changelog-kit": "file:../../../NPM/changelog-kit"
+    "@tordans/changelog-kit": "github:tordans/changelog-kit#main"
   }
 }
 ```
@@ -64,23 +64,6 @@ const data = changelogFileSchema.parse(await fetch('/changelog.gen.json').then((
 />
 ```
 
-## Publish to GitHub Packages (`tordans`)
+## Updates
 
-1. Create a personal access token with `read:packages` and `write:packages`.
-2. Add token as repository secret: `GH_PACKAGES_TOKEN`.
-3. Configure local auth in `~/.npmrc`:
-
-   ```ini
-   @tordans:registry=https://npm.pkg.github.com
-   //npm.pkg.github.com/:_authToken=YOUR_TOKEN
-   ```
-
-4. Bump version in `package.json`.
-5. Tag and push:
-
-   ```bash
-   git tag v0.1.0
-   git push origin main --tags
-   ```
-
-The publish workflow will run on version tags (`v*`) and publish `@tordans/changelog-kit`.
+Because dependencies use `github:tordans/changelog-kit#main`, `bun install` fetches the latest `main` from that repository.
