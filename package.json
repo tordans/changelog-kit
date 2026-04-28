@@ -39,8 +39,7 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
-    "prepare": "npm run build"
+    "lint": "eslint ."
   },
   "peerDependencies": {
     "react": ">=18.0.0"
