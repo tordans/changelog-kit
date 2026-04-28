@@ -1,11 +1,23 @@
 # @tordans/changelog-kit
 
-Shared changelog tooling for multiple repositories:
+Shared changelog scripts and React list component to manage and generate user facing changelogs.
 
-- CLI commands to `prefill`, `verify`, and `build` changelog assets
-- Core library APIs for registry + git changelog workflows
-- React `ChangelogList` component (list only, no page wrapper, no fetching)
-- Zod + TypeScript schemas for changelog payloads
+The goal is an automated reminder workflow that still leaves full control to the maintainer.
+
+## Features
+
+- [CLI commands](#cli-usage) to `prefill`, `verify`, and `build` changelog assets
+- [React `ChangelogList` component](#react-usage-list-only) to use in your changelog page
+- [Shared `changelog-update` agent skill](#shared-agent-skill) for commit-to-changelog triage workflows
+
+## Workflow
+
+- **Manual usage:** run `bun run changelog:prefill` to add missing refs, edit the registry entries (`description`, grouping, `hide`) manually, then run `bun run changelog`.
+  Note: `prefill` may auto-set `hide: true` for commits that look like non user facing.
+- **Guard:** add a [Husky `pre-push` hook](https://typicode.github.io/husky/get-started.html) that runs `bun run changelog` to verify and build before pushing.
+- **Review:** inspect the registry and generated files after `bun run changelog`, then adjust entries manually if needed before committing.
+- **LLM:** use the [Shared Agent Skill](#shared-agent-skill) with a prompt like "Update changelog from recent commits, group related commits, and hide non-user-facing work."
+- **Commits:** only user-facing changes belong in the changelog; non-user-facing changelog updates can be opted out with `hide changelog` (also supports `no-changelog` / `no changelog`) in the commit message body.
 
 ## Install
 
@@ -13,40 +25,38 @@ Shared changelog tooling for multiple repositories:
 bun add github:tordans/changelog-kit#main
 ```
 
-For local development from another repo:
+Because this dependency uses `github:tordans/changelog-kit#main`, run `bun update @tordans/changelog-kit` to pull the latest `main`.
+
+## CLI Usage
+
+Example `package.json` scripts in a consumer project:
 
 ```json
 {
-  "dependencies": {
-    "@tordans/changelog-kit": "github:tordans/changelog-kit#main"
+  "scripts": {
+    "changelog": "bun run changelog:verify && bun run changelog:build",
+    "changelog:prefill": "changelog-kit-prefill",
+    "changelog:verify": "changelog-kit-verify",
+    "changelog:build": "changelog-kit-build"
   }
 }
 ```
 
-## Registry Defaults
+Shared flags:
 
-By default, the package expects:
-
-- `changelog.registry.yaml`
-- `CHANGELOG.md`
-- `public/changelog.gen.json`
-
-You can override any path with CLI flags or `ChangelogKitConfig`.
-
-## CLI Usage
-
-```bash
-changelog-kit-prefill --registry-path changelog.registry.yaml
-changelog-kit-verify --registry-path changelog.registry.yaml
-changelog-kit-build --registry-path changelog.registry.yaml
-```
-
-Optional shared flags:
-
-- `--project-root /abs/or/relative/path`
+- `--registry-path changelog.registry.yaml`
+  Reads changelog entries from this registry file.
+  > Default: `changelog.registry.yaml`
 - `--output-json-path public/changelog.gen.json`
+  > Default: `public/changelog.gen.json`
 - `--output-markdown-path CHANGELOG.md`
+  > Default: `CHANGELOG.md`
+- `--project-root /abs/or/relative/path`
+  Resolves all relative paths from this directory instead of the current shell location.
+  > Default: current working directory
 - `--changelog-only-path <path>` (repeatable)
+  Limits git commit scanning to files that affect changelog generation.
+  > Default: not set
 
 ## Shared Agent Skill
 
@@ -78,6 +88,3 @@ const data = changelogFileSchema.parse(await fetch('/changelog.gen.json').then((
 />
 ```
 
-## Updates
-
-Because dependencies use `github:tordans/changelog-kit#main`, `bun install` fetches the latest `main` from that repository.
