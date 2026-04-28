@@ -64,6 +64,8 @@ declare function buildChangelog(projectRoot: string, config?: ChangelogKitConfig
 
 type PrefillResult = {
     addedEntries: ChangelogRegistryEntry[];
+    removedStaleRefCount: number;
+    removedEmptyEntryCount: number;
     skippedChangelogOnlyCount: number;
     skippedIgnoredCount: number;
     skippedOptOutCount: number;

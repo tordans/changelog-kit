@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { parseCliContext, resolveConfig, prefillChangelog, shortHash } from '../chunk-6NJQY5O5.js';
+import { parseCliContext, resolveConfig, prefillChangelog, shortHash } from '../chunk-UDTKMENL.js';
 import path from 'path';
 
 async function main() {
@@ -28,6 +28,14 @@ async function main() {
   if (result.skippedOptOutCount > 0) {
     console.info(
       `[changelog-kit:prefill] Skipped ${result.skippedOptOutCount} commits with changelog opt-out terms (no-changelog / no changelog / hide changelog).`
+    );
+  }
+  if (result.removedStaleRefCount > 0) {
+    console.info(`[changelog-kit:prefill] Removed ${result.removedStaleRefCount} stale refs.`);
+  }
+  if (result.removedEmptyEntryCount > 0) {
+    console.info(
+      `[changelog-kit:prefill] Removed ${result.removedEmptyEntryCount} registry entries that became empty.`
     );
   }
   console.info(`[changelog-kit:prefill] Registry file: ${registryAbsPath}`);
