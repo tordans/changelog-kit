@@ -14,10 +14,7 @@ export async function isChangelogOptOutCommit(projectRoot: string, ref: string):
   return isChangelogOptOutText(combined)
 }
 
-export function isChangelogOnlyPath(
-  relPath: string,
-  config?: ChangelogKitResolvedConfig,
-): boolean {
+export function isChangelogOnlyPath(relPath: string, config?: ChangelogKitResolvedConfig): boolean {
   const resolved = config ?? resolveConfig()
   return resolved.changelogOnlyPaths.has(normalizePathForGit(relPath))
 }

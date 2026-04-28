@@ -1,6 +1,11 @@
+import {
+  isChangelogOnlyCommit,
+  isChangelogOptOutCommit,
+  shortHash,
+  sliceCommitsSinceAnchor,
+} from './changelog'
 import type { ChangelogKitConfig } from './config'
 import { resolveConfig } from './config'
-import { isChangelogOnlyCommit, isChangelogOptOutCommit, shortHash, sliceCommitsSinceAnchor } from './changelog'
 import { listFirstParentHeadHistory, readCommitInfo, resolveCommitRef } from './git'
 import { readRegistry } from './registry'
 
@@ -39,7 +44,9 @@ export async function verifyChangelog(
 
   const invalidRefs = resolvedRows.filter((row) => row.resolvedHash === null)
   if (invalidRefs.length > 0) {
-    const list = invalidRefs.map((row) => `entry #${row.entryIndex + 1}: ${row.inputRef}`).join('\n')
+    const list = invalidRefs
+      .map((row) => `entry #${row.entryIndex + 1}: ${row.inputRef}`)
+      .join('\n')
     throw new Error(`[changelog:verify] Invalid refs found in changelog registry:\n${list}`)
   }
 
@@ -56,7 +63,9 @@ export async function verifyChangelog(
   if (duplicateHashes.length > 0) {
     const list = duplicateHashes
       .map(([hash, rows]) => {
-        const locations = rows.map((row) => `entry #${row.entryIndex + 1} (${row.inputRef})`).join(', ')
+        const locations = rows
+          .map((row) => `entry #${row.entryIndex + 1} (${row.inputRef})`)
+          .join(', ')
         return `- ${shortHash(hash)} appears multiple times: ${locations}`
       })
       .join('\n')
@@ -65,7 +74,10 @@ export async function verifyChangelog(
 
   const registeredHashes = new Set(Array.from(byHash.keys()))
   const firstParentHistory = await listFirstParentHeadHistory(projectRoot)
-  const { anchorHash, commitsSinceAnchor } = sliceCommitsSinceAnchor(firstParentHistory, registeredHashes)
+  const { anchorHash, commitsSinceAnchor } = sliceCommitsSinceAnchor(
+    firstParentHistory,
+    registeredHashes,
+  )
 
   const missingCommits = commitsSinceAnchor.filter((hash) => !registeredHashes.has(hash))
   const missingNonChangelogCommits: string[] = []

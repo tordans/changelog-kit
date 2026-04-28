@@ -1,7 +1,12 @@
 import type { ChangelogRegistryEntry } from '../schemas'
+import {
+  isChangelogOnlyCommit,
+  isChangelogOptOutCommit,
+  shortHash,
+  sliceCommitsSinceAnchor,
+} from './changelog'
 import type { ChangelogKitConfig } from './config'
 import { resolveConfig } from './config'
-import { isChangelogOnlyCommit, isChangelogOptOutCommit, shortHash, sliceCommitsSinceAnchor } from './changelog'
 import { listFirstParentHeadHistory, readCommitInfo, resolveCommitRef } from './git'
 import { readRegistry, writeRegistry } from './registry'
 

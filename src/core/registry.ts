@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+
 import { changelogRegistrySchema, type ChangelogRegistry } from '../schemas'
 import type { ChangelogKitResolvedConfig } from './config'
 import { resolveConfig } from './config'

@@ -1,9 +1,10 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+
 import type { ChangelogFile } from '../schemas'
+import { monthKeyFromIsoDate, shortHash } from './changelog'
 import type { ChangelogKitConfig } from './config'
 import { resolveConfig } from './config'
-import { monthKeyFromIsoDate, shortHash } from './changelog'
 import { readCommitInfo, resolveCommitRef } from './git'
 import { readRegistry } from './registry'
 
