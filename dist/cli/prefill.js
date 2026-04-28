@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { parseCliContext, resolveConfig, prefillChangelog, shortHash } from '../chunk-VSCIPOQB.js';
+import { parseCliContext, resolveConfig, prefillChangelog, shortHash } from '../chunk-6NJQY5O5.js';
 import path from 'path';
 
 async function main() {
@@ -18,6 +18,11 @@ async function main() {
   if (result.skippedChangelogOnlyCount > 0) {
     console.info(
       `[changelog-kit:prefill] Skipped ${result.skippedChangelogOnlyCount} changelog-only commits.`
+    );
+  }
+  if (result.skippedIgnoredCount > 0) {
+    console.info(
+      `[changelog-kit:prefill] Skipped ${result.skippedIgnoredCount} commits matching configured ignore terms.`
     );
   }
   if (result.skippedOptOutCount > 0) {

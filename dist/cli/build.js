@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { parseCliContext, resolveConfig, buildChangelog } from '../chunk-VSCIPOQB.js';
+import { parseCliContext, resolveConfig, buildChangelog } from '../chunk-6NJQY5O5.js';
 
 // src/cli/build.ts
 async function main() {

@@ -6,12 +6,14 @@ type ChangelogKitConfig = {
     outputMarkdownPath?: string;
     outputJsonPath?: string;
     changelogOnlyPaths?: string[];
+    ignoredCommitTerms?: string[];
 };
 type ChangelogKitResolvedConfig = {
     registryPath: string;
     outputMarkdownPath: string;
     outputJsonPath: string;
     changelogOnlyPaths: Set<string>;
+    ignoredCommitTerms: string[];
 };
 declare const DEFAULT_REGISTRY_PATH = "changelog.registry.yaml";
 declare const DEFAULT_MARKDOWN_PATH = "CHANGELOG.md";
@@ -20,7 +22,9 @@ declare function normalizePathForGit(relPath: string): string;
 declare function resolveConfig(config?: ChangelogKitConfig): ChangelogKitResolvedConfig;
 
 declare function isChangelogOptOutText(text: string): boolean;
+declare function isIgnoredByTerms(text: string, ignoredTerms: string[]): boolean;
 declare function isChangelogOptOutCommit(projectRoot: string, ref: string): Promise<boolean>;
+declare function isIgnoredCommit(projectRoot: string, ref: string, config?: ChangelogKitResolvedConfig): Promise<boolean>;
 declare function isChangelogOnlyPath(relPath: string, config?: ChangelogKitResolvedConfig): boolean;
 declare function isChangelogOnlyCommit(projectRoot: string, ref: string, config?: ChangelogKitResolvedConfig): Promise<boolean>;
 declare function monthKeyFromIsoDate(isoDate: string): string;
@@ -61,6 +65,7 @@ declare function buildChangelog(projectRoot: string, config?: ChangelogKitConfig
 type PrefillResult = {
     addedEntries: ChangelogRegistryEntry[];
     skippedChangelogOnlyCount: number;
+    skippedIgnoredCount: number;
     skippedOptOutCount: number;
     anchorHash: string | null;
 };
@@ -69,9 +74,10 @@ declare function prefillChangelog(projectRoot: string, config?: ChangelogKitConf
 type VerifyResult = {
     checkedNonChangelogCount: number;
     skippedChangelogOnlyCount: number;
+    skippedIgnoredCount: number;
     skippedOptOutCount: number;
     anchorHash: string | null;
 };
 declare function verifyChangelog(projectRoot: string, config?: ChangelogKitConfig): Promise<VerifyResult>;
 
-export { type ChangelogKitConfig, type ChangelogKitResolvedConfig, type CommitInfo, type CoverageSlice, DEFAULT_JSON_PATH, DEFAULT_MARKDOWN_PATH, DEFAULT_REGISTRY_PATH, type PrefillResult, type VerifyResult, buildChangelog, isChangelogOnlyCommit, isChangelogOnlyPath, isChangelogOptOutCommit, isChangelogOptOutText, listCommitChangedPaths, listFirstParentHeadHistory, monthKeyFromIsoDate, normalizePathForGit, prefillChangelog, readCommitInfo, readRegistry, resolveCommitRef, resolveConfig, runGit, shortHash, sliceCommitsSinceAnchor, verifyChangelog, writeRegistry };
+export { type ChangelogKitConfig, type ChangelogKitResolvedConfig, type CommitInfo, type CoverageSlice, DEFAULT_JSON_PATH, DEFAULT_MARKDOWN_PATH, DEFAULT_REGISTRY_PATH, type PrefillResult, type VerifyResult, buildChangelog, isChangelogOnlyCommit, isChangelogOnlyPath, isChangelogOptOutCommit, isChangelogOptOutText, isIgnoredByTerms, isIgnoredCommit, listCommitChangedPaths, listFirstParentHeadHistory, monthKeyFromIsoDate, normalizePathForGit, prefillChangelog, readCommitInfo, readRegistry, resolveCommitRef, resolveConfig, runGit, shortHash, sliceCommitsSinceAnchor, verifyChangelog, writeRegistry };
