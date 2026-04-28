@@ -36,9 +36,9 @@ You can override any path with CLI flags or `ChangelogKitConfig`.
 ## CLI Usage
 
 ```bash
-changelog-kit-prefill --registry-path registry.yaml
-changelog-kit-verify --registry-path registry.yaml
-changelog-kit-build --registry-path registry.yaml
+changelog-kit-prefill --registry-path changelog.registry.yaml
+changelog-kit-verify --registry-path changelog.registry.yaml
+changelog-kit-build --registry-path changelog.registry.yaml
 ```
 
 Optional shared flags:
@@ -47,6 +47,20 @@ Optional shared flags:
 - `--output-json-path public/changelog.gen.json`
 - `--output-markdown-path CHANGELOG.md`
 - `--changelog-only-path <path>` (repeatable)
+
+## Shared Agent Skill
+
+This package also ships a reusable agent skill at `.cursor/skills/changelog-update/SKILL.md`.
+
+If you want Cursor to load it in a consumer repository, use the bundled reference template in this package.
+
+Run from inside the consumer repository (after installing dependencies so the file exists in `node_modules`).
+
+Example command:
+
+```bash
+mkdir -p ".cursor/skills/changelog-update" && cp "node_modules/@tordans/changelog-kit/.cursor/skills/changelog-update/SKILL.reference.md" ".cursor/skills/changelog-update/SKILL.md"
+```
 
 ## React Usage (list only)
 

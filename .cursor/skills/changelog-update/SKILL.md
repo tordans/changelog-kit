@@ -1,22 +1,24 @@
 ---
 name: changelog-update
 description: Update the project changelog registry from recent git commits. Use when the user asks to add missing changelog refs, draft descriptions, translate entries to German, group related commits, or mark non-user-facing work as hidden.
+license: MIT
 ---
 
 # Changelog Update
 
 Use this short workflow:
 
-1. Run `bun run changelog:prefill`.
-2. Run `bun run changelog:verify` and read missing refs from output.
+1. Run `changelog-kit-prefill`.
+2. Run `changelog-kit-verify` and read missing refs from output.
 3. Group related refs into one registry entry where they describe one change.
 4. Keep visible entries in German, short and user-facing.
 5. Mark technical-only entries with `hide: true` and remove `descriptionMd`.
-6. Run `bun run changelog` until verify/build pass.
-7. Commit generated changelog files and registry updates with `git commit -m "Update changelog" -m "hide changelog"`
+6. Run `changelog-kit-build` after `verify` passes.
+7. If paths differ from defaults, repeat commands with CLI flags such as `--registry-path`, `--output-markdown-path`, and `--output-json-path`.
+8. Commit generated changelog files and registry updates with `git commit -m "Update changelog" -m "hide changelog"` to prevent changelog-loop commits.
 
 Rules:
 
-- Registry file: `registry.yaml`.
+- Registry file default: `changelog.registry.yaml` (override via config or `--registry-path`).
 - Visible entry shape: `refs` + `descriptionMd`.
 - Hidden entry shape: `refs` + `hide: true` (no description).

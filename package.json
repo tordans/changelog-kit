@@ -14,7 +14,9 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    ".cursor/skills",
+    ".cursor/skills/changelog-update/SKILL.reference.md"
   ],
   "type": "module",
   "sideEffects": false,
@@ -58,5 +60,21 @@
   },
   "peerDependencies": {
     "react": ">=18.0.0"
+  },
+  "agents": {
+    "skills": [
+      {
+        "name": "changelog-update",
+        "path": "./.cursor/skills/changelog-update"
+      }
+    ]
+  },
+  "agentskills": {
+    "skills": [
+      {
+        "name": "changelog-update",
+        "path": "./.cursor/skills/changelog-update"
+      }
+    ]
   }
 }

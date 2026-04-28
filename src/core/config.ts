@@ -14,7 +14,7 @@ export type ChangelogKitResolvedConfig = {
   changelogOnlyPaths: Set<string>
 }
 
-export const DEFAULT_REGISTRY_PATH = 'registry.yaml'
+export const DEFAULT_REGISTRY_PATH = 'changelog.registry.yaml'
 export const DEFAULT_MARKDOWN_PATH = 'CHANGELOG.md'
 export const DEFAULT_JSON_PATH = path.join('public', 'changelog.gen.json')
 
