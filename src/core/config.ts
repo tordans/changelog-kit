@@ -35,9 +35,7 @@ export function resolveConfig(config?: ChangelogKitConfig): ChangelogKitResolved
   )
   const ignoredCommitTerms = Array.from(
     new Set(
-      (config?.ignoredCommitTerms ?? [])
-        .map((term) => term.trim().toLowerCase())
-        .filter(Boolean),
+      (config?.ignoredCommitTerms ?? []).map((term) => term.trim().toLowerCase()).filter(Boolean),
     ),
   )
   return {

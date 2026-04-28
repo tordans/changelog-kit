@@ -33,6 +33,14 @@ async function main() {
       `[changelog-kit:prefill] Skipped ${result.skippedOptOutCount} commits with changelog opt-out terms (no-changelog / no changelog / hide changelog).`,
     )
   }
+  if (result.removedStaleRefCount > 0) {
+    console.info(`[changelog-kit:prefill] Removed ${result.removedStaleRefCount} stale refs.`)
+  }
+  if (result.removedEmptyEntryCount > 0) {
+    console.info(
+      `[changelog-kit:prefill] Removed ${result.removedEmptyEntryCount} registry entries that became empty.`,
+    )
+  }
 
   console.info(`[changelog-kit:prefill] Registry file: ${registryAbsPath}`)
   console.info(

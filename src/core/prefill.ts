@@ -39,6 +39,8 @@ function draftDescription(subject: string, body: string): string {
 
 export type PrefillResult = {
   addedEntries: ChangelogRegistryEntry[]
+  removedStaleRefCount: number
+  removedEmptyEntryCount: number
   skippedChangelogOnlyCount: number
   skippedIgnoredCount: number
   skippedOptOutCount: number
@@ -51,6 +53,30 @@ export async function prefillChangelog(
 ): Promise<PrefillResult> {
   const resolvedConfig = resolveConfig(config)
   const registry = await readRegistry(projectRoot, resolvedConfig)
+  const history = await listFirstParentHeadHistory(projectRoot)
+  const historySet = new Set(history)
+  let removedStaleRefCount = 0
+
+  const entryCountBeforeCleanup = registry.entries.length
+  const cleanedEntries = await Promise.all(
+    registry.entries.map(async (entry) => {
+      const keepRefs: string[] = []
+      for (const ref of entry.refs) {
+        const resolved = await resolveCommitRef(projectRoot, ref)
+        if (!resolved.hash || !historySet.has(resolved.hash)) {
+          removedStaleRefCount += 1
+          continue
+        }
+        keepRefs.push(ref)
+      }
+      return {
+        ...entry,
+        refs: keepRefs,
+      }
+    }),
+  )
+  registry.entries = cleanedEntries.filter((entry) => entry.refs.length > 0)
+  const removedEmptyEntryCount = entryCountBeforeCleanup - registry.entries.length
   const existingRefs = registry.entries.flatMap((entry) => entry.refs)
   const registeredHashes = new Set<string>()
   for (const ref of existingRefs) {
@@ -60,7 +86,6 @@ export async function prefillChangelog(
     }
   }
 
-  const history = await listFirstParentHeadHistory(projectRoot)
   const { anchorHash, commitsSinceAnchor } = sliceCommitsSinceAnchor(history, registeredHashes)
   const missingCommits = commitsSinceAnchor.filter((hash) => !registeredHashes.has(hash))
   const orderedMissing = [...missingCommits].reverse()
@@ -106,12 +131,14 @@ export async function prefillChangelog(
     addedEntries.push(entry)
   }
 
-  if (addedEntries.length > 0) {
+  if (addedEntries.length > 0 || removedStaleRefCount > 0 || removedEmptyEntryCount > 0) {
     await writeRegistry(projectRoot, registry, resolvedConfig)
   }
 
   return {
     addedEntries,
+    removedStaleRefCount,
+    removedEmptyEntryCount,
     skippedChangelogOnlyCount,
     skippedIgnoredCount,
     skippedOptOutCount,
