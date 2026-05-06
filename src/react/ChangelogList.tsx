@@ -1,4 +1,5 @@
 import type { ChangelogFile } from '../schemas'
+import { micromark } from 'micromark'
 
 export type ChangelogListLabels = {
   empty: string
@@ -52,15 +53,10 @@ export function ChangelogList({ data, commitUrl, labels, className }: ChangelogL
               {showMonth ? month : <span className="sr-only">{month}</span>}
             </dt>
             <dd className="mt-1 text-sm/6 text-zinc-300 sm:col-span-2 sm:mt-0">
-              <div className="space-y-2 text-sm text-zinc-200">
-                {descriptionMd
-                  .split('\n')
-                  .map((line) => line.trim())
-                  .filter(Boolean)
-                  .map((line, index) => (
-                    <p key={`${refs.join(',')}-${index}`}>{line}</p>
-                  ))}
-              </div>
+              <div
+                className="space-y-2 text-sm text-zinc-200 [&_a]:underline [&_a]:decoration-emerald-400/40 [&_a]:underline-offset-2 hover:[&_a]:decoration-emerald-300 [&_code]:rounded [&_code]:bg-zinc-800/80 [&_code]:px-1 [&_code]:py-0.5 [&_ol]:ml-4 [&_ol]:list-decimal [&_p]:mb-2 [&_ul]:ml-4 [&_ul]:list-disc"
+                dangerouslySetInnerHTML={{ __html: micromark(descriptionMd) }}
+              />
               <p className="mt-1 text-xs text-emerald-300">
                 {refsDisplay.map((ref, index) => (
                   <span key={`${refs.join(',')}-${ref}`}>

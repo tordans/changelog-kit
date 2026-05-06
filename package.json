@@ -55,6 +55,7 @@
     "verify:dist": "bun run build && git diff --quiet -- dist || (echo 'dist is out of date. Run bun run build and commit dist.' && exit 1)"
   },
   "dependencies": {
+    "micromark": "^4.0.2",
     "yaml": "^2.8.1",
     "zod": "^3.24.1"
   },
