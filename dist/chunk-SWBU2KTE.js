@@ -1,3 +1,4 @@
+import { micromark } from 'micromark';
 import { jsx, jsxs } from 'react/jsx-runtime';
 
 // src/react/ChangelogList.tsx
@@ -24,7 +25,13 @@ function ChangelogList({ data, commitUrl, labels, className }) {
   return /* @__PURE__ */ jsx("div", { className, children: /* @__PURE__ */ jsx("dl", { className: "divide-y divide-zinc-800 border-t border-zinc-800", children: rows.map(({ month, showMonth, refs, refsDisplay, descriptionMd }) => /* @__PURE__ */ jsxs("div", { className: "py-6 sm:grid sm:grid-cols-3 sm:gap-4", children: [
     /* @__PURE__ */ jsx("dt", { className: "text-sm/6 font-medium text-zinc-100", children: showMonth ? month : /* @__PURE__ */ jsx("span", { className: "sr-only", children: month }) }),
     /* @__PURE__ */ jsxs("dd", { className: "mt-1 text-sm/6 text-zinc-300 sm:col-span-2 sm:mt-0", children: [
-      /* @__PURE__ */ jsx("div", { className: "space-y-2 text-sm text-zinc-200", children: descriptionMd.split("\n").map((line) => line.trim()).filter(Boolean).map((line, index) => /* @__PURE__ */ jsx("p", { children: line }, `${refs.join(",")}-${index}`)) }),
+      /* @__PURE__ */ jsx(
+        "div",
+        {
+          className: "space-y-2 text-sm text-zinc-200 [&_a]:underline [&_a]:decoration-emerald-400/40 [&_a]:underline-offset-2 hover:[&_a]:decoration-emerald-300 [&_code]:rounded [&_code]:bg-zinc-800/80 [&_code]:px-1 [&_code]:py-0.5 [&_ol]:ml-4 [&_ol]:list-decimal [&_p]:mb-2 [&_ul]:ml-4 [&_ul]:list-disc",
+          dangerouslySetInnerHTML: { __html: micromark(descriptionMd) }
+        }
+      ),
       /* @__PURE__ */ jsx("p", { className: "mt-1 text-xs text-emerald-300", children: refsDisplay.map((ref, index) => /* @__PURE__ */ jsxs("span", { children: [
         index > 0 ? ", " : null,
         /* @__PURE__ */ jsx(
@@ -43,5 +50,5 @@ function ChangelogList({ data, commitUrl, labels, className }) {
 }
 
 export { ChangelogList };
-//# sourceMappingURL=chunk-6VWL4IDY.js.map
-//# sourceMappingURL=chunk-6VWL4IDY.js.map
+//# sourceMappingURL=chunk-SWBU2KTE.js.map
+//# sourceMappingURL=chunk-SWBU2KTE.js.map
