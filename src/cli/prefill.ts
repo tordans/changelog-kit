@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { styleText } from 'node:util'
 
 import { shortHash, prefillChangelog, resolveConfig } from '../core'
 import { parseCliContext } from './args'
@@ -42,7 +43,9 @@ async function main() {
     )
   }
 
-  console.info(`[changelog-kit:prefill] Registry file: ${registryAbsPath}`)
+  console.info(
+    `[changelog-kit:prefill] Registry file: ${styleText(['bold', 'cyan'], registryAbsPath)}`,
+  )
   console.info(
     '[changelog-kit:prefill] Next step: edit registry entries, then run: bun run changelog',
   )

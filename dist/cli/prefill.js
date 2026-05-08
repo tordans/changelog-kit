@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { parseCliContext, resolveConfig, prefillChangelog, shortHash } from '../chunk-UDTKMENL.js';
 import path from 'path';
+import { styleText } from 'util';
 
 async function main() {
   const { projectRoot, config } = parseCliContext(process.argv.slice(2));
@@ -38,7 +39,9 @@ async function main() {
       `[changelog-kit:prefill] Removed ${result.removedEmptyEntryCount} registry entries that became empty.`
     );
   }
-  console.info(`[changelog-kit:prefill] Registry file: ${registryAbsPath}`);
+  console.info(
+    `[changelog-kit:prefill] Registry file: ${styleText(["bold", "cyan"], registryAbsPath)}`
+  );
   console.info(
     "[changelog-kit:prefill] Next step: edit registry entries, then run: bun run changelog"
   );
