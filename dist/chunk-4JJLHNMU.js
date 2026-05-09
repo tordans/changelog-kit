@@ -1,8 +1,7 @@
-#!/usr/bin/env node
+import { changelogRegistrySchema } from './chunk-MWID7EK6.js';
 import path2 from 'path';
 import { spawn } from 'child_process';
-import { writeFile, mkdir, readFile } from 'fs/promises';
-import { z } from 'zod';
+import { readFile, mkdir, writeFile } from 'fs/promises';
 
 var DEFAULT_REGISTRY_PATH = "changelog.registry.yaml";
 var DEFAULT_MARKDOWN_PATH = "CHANGELOG.md";
@@ -32,20 +31,35 @@ function resolveConfig(config) {
     ignoredCommitTerms
   };
 }
+var GIT_BATCH_CHUNK_SIZE = 128;
 async function runGit(args, options) {
   const proc = spawn("git", args, {
     cwd: options.cwd,
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: options.stdin != null ? ["pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"]
   });
+  const childIn = proc.stdin;
+  const childOut = proc.stdout;
+  const childErr = proc.stderr;
+  if (!childOut || !childErr) {
+    throw new Error("git spawn failed: missing stdio pipes");
+  }
+  if (options.stdin != null) {
+    if (!childIn) {
+      throw new Error("git spawn failed: stdin not available");
+    }
+    childIn.write(options.stdin);
+    childIn.end();
+  }
   const stdoutChunks = [];
   const stderrChunks = [];
-  proc.stdout.on("data", (chunk) => stdoutChunks.push(chunk));
-  proc.stderr.on("data", (chunk) => stderrChunks.push(chunk));
+  childOut.on("data", (chunk) => stdoutChunks.push(chunk));
+  childErr.on("data", (chunk) => stderrChunks.push(chunk));
   const code = await new Promise((resolve, reject) => {
     proc.on("error", reject);
     proc.on("close", (exitCode) => resolve(exitCode ?? 1));
   });
-  const stdout = Buffer.concat(stdoutChunks).toString("utf8").trim();
+  const stdoutRaw = Buffer.concat(stdoutChunks).toString("utf8");
+  const stdout = options.trimOutput === false ? stdoutRaw : stdoutRaw.trim();
   const stderr = Buffer.concat(stderrChunks).toString("utf8").trim();
   if (code !== 0 && !options.acceptNonZero) {
     throw new Error(`git ${args.join(" ")} failed (${code})${stderr ? `: ${stderr}` : ""}`);
@@ -77,12 +91,117 @@ async function readCommitInfo(projectRoot, ref) {
   }
   return { hash, committedAtIso, subject, body: body.trim() };
 }
+var COMMIT_METADATA_PRETTY = "%H%x00%cI%x00%s%x00%b%x00";
+function parseNullDelimitedCommitBatch(stdout) {
+  const segments = stdout.split("\0");
+  const commits = [];
+  let i = 0;
+  while (i < segments.length) {
+    while (i < segments.length && segments[i] === "") {
+      i += 1;
+    }
+    if (i >= segments.length) break;
+    const hash = segments[i++] ?? "";
+    const committedAtIso = segments[i++] ?? "";
+    const subject = segments[i++] ?? "";
+    const body = (segments[i++] ?? "").trim();
+    if (!hash || !committedAtIso || !subject) {
+      throw new Error("Could not parse batched commit metadata (unexpected git output).");
+    }
+    commits.push({ hash, committedAtIso, subject, body });
+  }
+  return commits;
+}
+async function readCommitsInfoBatch(projectRoot, refs) {
+  const uniq = [...new Set(refs)].filter(Boolean);
+  const result = /* @__PURE__ */ new Map();
+  if (uniq.length === 0) return result;
+  for (let offset = 0; offset < uniq.length; offset += GIT_BATCH_CHUNK_SIZE) {
+    const chunk = uniq.slice(offset, offset + GIT_BATCH_CHUNK_SIZE);
+    const stdin = `${chunk.join("\n")}
+`;
+    const out = await runGit(
+      [
+        "-c",
+        "core.quotepath=false",
+        "log",
+        "--stdin",
+        "--no-walk=sorted",
+        "-z",
+        `--pretty=format:${COMMIT_METADATA_PRETTY}`
+      ],
+      { cwd: projectRoot, stdin, trimOutput: false }
+    );
+    for (const info of parseNullDelimitedCommitBatch(out)) {
+      result.set(info.hash, info);
+    }
+  }
+  return result;
+}
+var CHANGELOG_MARKER_PREFIX = "CHANGELOG_KIT_MARKER:";
 async function listCommitChangedPaths(projectRoot, ref) {
   const out = await runGit(["show", "--name-only", "--pretty=format:", "--no-renames", ref], {
     cwd: projectRoot
   });
   if (!out) return [];
   return out.split("\n").map((line) => line.trim()).filter(Boolean);
+}
+async function listCommitsChangedPathsBatch(projectRoot, refs) {
+  const uniq = [...new Set(refs)].filter(Boolean);
+  const result = /* @__PURE__ */ new Map();
+  if (uniq.length === 0) return result;
+  for (let offset = 0; offset < uniq.length; offset += GIT_BATCH_CHUNK_SIZE) {
+    const chunk = uniq.slice(offset, offset + GIT_BATCH_CHUNK_SIZE);
+    const stdin = `${chunk.join("\n")}
+`;
+    const stdout = await runGit(
+      [
+        "-c",
+        "core.quotepath=false",
+        "log",
+        "--stdin",
+        "--no-walk=sorted",
+        `--format=${CHANGELOG_MARKER_PREFIX}%H`,
+        "--name-only"
+      ],
+      { cwd: projectRoot, stdin }
+    );
+    parseNameOnlyChunkMarkerLogStdout(stdout).forEach((paths, hash) => {
+      result.set(hash, paths);
+    });
+  }
+  return result;
+}
+function parseNameOnlyChunkMarkerLogStdout(stdout) {
+  const lines = stdout.split(/\r?\n/);
+  const map = /* @__PURE__ */ new Map();
+  let currentHash = null;
+  let bucket = [];
+  const prefix = CHANGELOG_MARKER_PREFIX;
+  const flush = () => {
+    if (!currentHash) return;
+    map.set(currentHash, bucket);
+    currentHash = null;
+    bucket = [];
+  };
+  for (const raw of lines) {
+    const line = raw.replace(/\r$/, "");
+    if (line.startsWith(prefix)) {
+      flush();
+      currentHash = line.slice(prefix.length);
+      bucket = [];
+      continue;
+    }
+    if (!currentHash) {
+      continue;
+    }
+    if (line.trim() === "" && bucket.length === 0) {
+      continue;
+    }
+    bucket.push(line.trim());
+  }
+  flush();
+  return map;
 }
 
 // src/core/changelog.ts
@@ -97,17 +216,23 @@ function isIgnoredByTerms(text, ignoredTerms) {
 }
 async function isChangelogOptOutCommit(projectRoot, ref) {
   const commit = await readCommitInfo(projectRoot, ref);
+  return isChangelogOptOutFromCommit(commit);
+}
+function isChangelogOptOutFromCommit(commit) {
   const combined = `${commit.subject}
 ${commit.body}`;
   return isChangelogOptOutText(combined);
 }
 async function isIgnoredCommit(projectRoot, ref, config) {
   const resolved = config ?? resolveConfig();
-  if (resolved.ignoredCommitTerms.length === 0) return false;
   const commit = await readCommitInfo(projectRoot, ref);
+  return isIgnoredFromCommit(commit, resolved);
+}
+function isIgnoredFromCommit(commit, config) {
+  if (config.ignoredCommitTerms.length === 0) return false;
   const combined = `${commit.subject}
 ${commit.body}`;
-  return isIgnoredByTerms(combined, resolved.ignoredCommitTerms);
+  return isIgnoredByTerms(combined, config.ignoredCommitTerms);
 }
 function isChangelogOnlyPath(relPath, config) {
   const resolved = config ?? resolveConfig();
@@ -115,6 +240,9 @@ function isChangelogOnlyPath(relPath, config) {
 }
 async function isChangelogOnlyCommit(projectRoot, ref, config) {
   const paths = await listCommitChangedPaths(projectRoot, ref);
+  return isChangelogOnlyFromPaths(paths, config ?? resolveConfig());
+}
+function isChangelogOnlyFromPaths(paths, config) {
   if (paths.length === 0) return false;
   return paths.every((p) => isChangelogOnlyPath(p, config));
 }
@@ -141,51 +269,6 @@ function sliceCommitsSinceAnchor(firstParentHeadHistory, registeredHashes) {
 function shortHash(hash) {
   return hash.slice(0, 7);
 }
-var refsSchema = z.array(z.string().trim().min(1)).min(1);
-var visibleRegistryEntrySchema = z.object({
-  hide: z.literal(false),
-  refs: refsSchema,
-  descriptionMd: z.string().trim().min(1)
-});
-var hiddenRegistryEntrySchema = z.object({
-  hide: z.literal(true),
-  refs: refsSchema,
-  descriptionMd: z.never().optional()
-});
-var changelogRegistryEntrySchema = z.discriminatedUnion("hide", [
-  visibleRegistryEntrySchema,
-  hiddenRegistryEntrySchema
-]);
-var changelogRegistryEntryInputSchema = z.object({
-  hide: z.boolean().optional(),
-  refs: refsSchema,
-  descriptionMd: z.string().optional()
-}).transform((entry) => ({
-  hide: entry.hide ?? false,
-  refs: entry.refs,
-  descriptionMd: entry.descriptionMd
-})).pipe(changelogRegistryEntrySchema);
-var changelogRegistrySchema = z.object({
-  entries: z.array(changelogRegistryEntryInputSchema)
-});
-var changelogEntrySchema = z.object({
-  refs: z.array(z.string().min(1)).min(1),
-  refsDisplay: z.array(z.string().min(1)).min(1),
-  descriptionMd: z.string().min(1),
-  committedAtIso: z.string().min(1),
-  committedAtShort: z.string().min(1)
-});
-z.object({
-  generatedAt: z.string().min(1),
-  months: z.array(
-    z.object({
-      month: z.string().regex(/^\d{4}-\d{2}$/),
-      entries: z.array(changelogEntrySchema)
-    })
-  )
-});
-
-// src/core/registry.ts
 async function readRegistry(projectRoot, config) {
   const resolved = config ?? resolveConfig();
   const abs = path2.join(projectRoot, resolved.registryPath);
@@ -216,8 +299,6 @@ async function writeRegistry(projectRoot, registry, config) {
 `;
   await writeFile(abs, yaml, "utf8");
 }
-
-// src/core/build.ts
 function normalizeMarkdownBody(markdown) {
   return markdown.trim().replace(/\n{3,}/g, "\n\n");
 }
@@ -326,6 +407,7 @@ async function buildChangelog(projectRoot, config) {
 // src/core/prefill.ts
 var HIDE_TERMS = ["chore", "lint", "autoformat"];
 var VISIBLE_HINT_TERMS = ["feature", "improve"];
+var PREFILTER_BATCH_SIZE = 128;
 function shouldHideFromSubject(subject) {
   const lower = subject.toLowerCase();
   const hasHiddenTerm = HIDE_TERMS.some((term) => lower.includes(term));
@@ -348,12 +430,20 @@ async function prefillChangelog(projectRoot, config) {
   const history = await listFirstParentHeadHistory(projectRoot);
   const historySet = new Set(history);
   let removedStaleRefCount = 0;
+  const refResolveCache = /* @__PURE__ */ new Map();
+  const resolveRefCached = async (ref) => {
+    const hit = refResolveCache.get(ref);
+    if (hit) return hit;
+    const r = await resolveCommitRef(projectRoot, ref);
+    refResolveCache.set(ref, r);
+    return r;
+  };
   const entryCountBeforeCleanup = registry.entries.length;
   const cleanedEntries = await Promise.all(
     registry.entries.map(async (entry) => {
       const keepRefs = [];
       for (const ref of entry.refs) {
-        const resolved = await resolveCommitRef(projectRoot, ref);
+        const resolved = await resolveRefCached(ref);
         if (!resolved.hash || !historySet.has(resolved.hash)) {
           removedStaleRefCount += 1;
           continue;
@@ -371,7 +461,7 @@ async function prefillChangelog(projectRoot, config) {
   const existingRefs = registry.entries.flatMap((entry) => entry.refs);
   const registeredHashes = /* @__PURE__ */ new Set();
   for (const ref of existingRefs) {
-    const resolved = await resolveCommitRef(projectRoot, ref);
+    const resolved = await resolveRefCached(ref);
     if (resolved.hash) {
       registeredHashes.add(resolved.hash);
     }
@@ -383,24 +473,43 @@ async function prefillChangelog(projectRoot, config) {
   let skippedChangelogOnlyCount = 0;
   let skippedIgnoredCount = 0;
   let skippedOptOutCount = 0;
-  for (const hash of orderedMissing) {
-    if (await isChangelogOnlyCommit(projectRoot, hash, resolvedConfig)) {
-      skippedChangelogOnlyCount += 1;
-      continue;
+  const commitInfoCache = /* @__PURE__ */ new Map();
+  for (let offset = 0; offset < orderedMissing.length; offset += PREFILTER_BATCH_SIZE) {
+    const slice = orderedMissing.slice(offset, offset + PREFILTER_BATCH_SIZE);
+    const uniq = [...new Set(slice)];
+    const [pathsByHash, infoByHash] = await Promise.all([
+      listCommitsChangedPathsBatch(projectRoot, uniq),
+      readCommitsInfoBatch(projectRoot, uniq)
+    ]);
+    for (const hash of slice) {
+      let paths = pathsByHash.get(hash);
+      if (paths === void 0) {
+        paths = await listCommitChangedPaths(projectRoot, hash);
+      }
+      if (isChangelogOnlyFromPaths(paths, resolvedConfig)) {
+        skippedChangelogOnlyCount += 1;
+        continue;
+      }
+      let commit = infoByHash.get(hash);
+      if (!commit) {
+        commit = await readCommitInfo(projectRoot, hash);
+      }
+      if (isIgnoredFromCommit(commit, resolvedConfig)) {
+        skippedIgnoredCount += 1;
+        continue;
+      }
+      if (isChangelogOptOutFromCommit(commit)) {
+        skippedOptOutCount += 1;
+        continue;
+      }
+      const canonicalHash = commit.hash;
+      commitInfoCache.set(canonicalHash, commit);
+      missingNonChangelogCommits.push(canonicalHash);
     }
-    if (await isIgnoredCommit(projectRoot, hash, resolvedConfig)) {
-      skippedIgnoredCount += 1;
-      continue;
-    }
-    if (await isChangelogOptOutCommit(projectRoot, hash)) {
-      skippedOptOutCount += 1;
-      continue;
-    }
-    missingNonChangelogCommits.push(hash);
   }
   const addedEntries = [];
   for (const hash of missingNonChangelogCommits) {
-    const commit = await readCommitInfo(projectRoot, hash);
+    const commit = commitInfoCache.get(hash) ?? await readCommitInfo(projectRoot, hash);
     if (shouldHideFromSubject(commit.subject)) {
       const entry2 = {
         refs: [shortHash(commit.hash)],
@@ -551,42 +660,6 @@ async function verifyChangelog(projectRoot, config) {
   };
 }
 
-// src/cli/args.ts
-function readRawArgs(argv) {
-  const map = /* @__PURE__ */ new Map();
-  for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i];
-    if (!token.startsWith("--")) {
-      continue;
-    }
-    const key = token.slice(2);
-    const next = argv[i + 1];
-    if (!next || next.startsWith("--")) {
-      const list2 = map.get(key) ?? [];
-      list2.push("true");
-      map.set(key, list2);
-      continue;
-    }
-    const list = map.get(key) ?? [];
-    list.push(next);
-    map.set(key, list);
-    i += 1;
-  }
-  return map;
-}
-function parseCliContext(argv) {
-  const args = readRawArgs(argv);
-  const projectRoot = args.get("project-root")?.at(-1) ?? process.cwd();
-  const config = {
-    registryPath: args.get("registry-path")?.at(-1),
-    outputJsonPath: args.get("output-json-path")?.at(-1),
-    outputMarkdownPath: args.get("output-markdown-path")?.at(-1),
-    changelogOnlyPaths: args.get("changelog-only-path"),
-    ignoredCommitTerms: args.get("ignore-commit-term")
-  };
-  return { projectRoot, config };
-}
-
-export { buildChangelog, parseCliContext, prefillChangelog, resolveConfig, shortHash, verifyChangelog };
-//# sourceMappingURL=chunk-UDTKMENL.js.map
-//# sourceMappingURL=chunk-UDTKMENL.js.map
+export { DEFAULT_JSON_PATH, DEFAULT_MARKDOWN_PATH, DEFAULT_REGISTRY_PATH, buildChangelog, isChangelogOnlyCommit, isChangelogOnlyFromPaths, isChangelogOnlyPath, isChangelogOptOutCommit, isChangelogOptOutFromCommit, isChangelogOptOutText, isIgnoredByTerms, isIgnoredCommit, isIgnoredFromCommit, listCommitChangedPaths, listCommitsChangedPathsBatch, listFirstParentHeadHistory, monthKeyFromIsoDate, normalizePathForGit, parseNameOnlyChunkMarkerLogStdout, prefillChangelog, readCommitInfo, readCommitsInfoBatch, readRegistry, resolveCommitRef, resolveConfig, runGit, shortHash, sliceCommitsSinceAnchor, verifyChangelog, writeRegistry };
+//# sourceMappingURL=chunk-4JJLHNMU.js.map
+//# sourceMappingURL=chunk-4JJLHNMU.js.map

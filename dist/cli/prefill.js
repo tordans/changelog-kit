@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { parseCliContext, resolveConfig, prefillChangelog, shortHash } from '../chunk-UDTKMENL.js';
+import { parseCliContext, resolveConfig, prefillChangelog, shortHash } from '../chunk-3ZRK5GL6.js';
 import path from 'path';
 import { styleText } from 'util';
 

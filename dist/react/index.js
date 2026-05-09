@@ -1,3 +1,3 @@
-export { ChangelogList } from '../chunk-SWBU2KTE.js';
+export { ChangelogList } from '../chunk-VNQMRFOB.js';
 //# sourceMappingURL=index.js.map
 //# sourceMappingURL=index.js.map

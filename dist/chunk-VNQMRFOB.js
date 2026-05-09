@@ -50,5 +50,5 @@ function ChangelogList({ data, commitUrl, labels, className }) {
 }
 
 export { ChangelogList };
-//# sourceMappingURL=chunk-SWBU2KTE.js.map
-//# sourceMappingURL=chunk-SWBU2KTE.js.map
+//# sourceMappingURL=chunk-VNQMRFOB.js.map
+//# sourceMappingURL=chunk-VNQMRFOB.js.map
