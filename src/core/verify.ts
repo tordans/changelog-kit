@@ -36,8 +36,8 @@ export async function verifyChangelog(
 
   const remediation = [
     `[changelog:verify] Registry file: ${registryAbsPath}`,
-    '[changelog:verify] Next step: bun run changelog:prefill',
-    '[changelog:verify] Then run: bun run changelog:verify',
+    '[changelog:verify] Next step: changelog --cleanup --prefill',
+    '[changelog:verify] Then run: changelog --validate',
   ]
 
   const resolvedRows: ResolvedRefRow[] = []

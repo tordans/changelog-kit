@@ -18,9 +18,7 @@ export default defineConfig([
   },
   {
     entry: {
-      'cli/build': 'src/cli/build.ts',
-      'cli/verify': 'src/cli/verify.ts',
-      'cli/prefill': 'src/cli/prefill.ts',
+      'cli/changelog': 'src/cli/changelog.ts',
     },
     format: ['esm'],
     dts: true,

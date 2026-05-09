@@ -6,6 +6,7 @@ import {
   shortHash,
   sliceCommitsSinceAnchor,
 } from './changelog'
+import { cleanupRegistryStaleRefs } from './cleanup'
 import type { ChangelogKitConfig } from './config'
 import { resolveConfig } from './config'
 import type { CommitInfo } from './git'
@@ -58,15 +59,25 @@ export type PrefillResult = {
   anchorHash: string | null
 }
 
+export type PrefillOptions = {
+  /**
+   * When true, stale-ref / empty-entry cleanup is skipped (for example the `cleanup` phase
+   * already ran in the same CLI invocation).
+   */
+  skipInitialCleanup?: boolean
+}
+
 export async function prefillChangelog(
   projectRoot: string,
   config?: ChangelogKitConfig,
+  options?: PrefillOptions,
 ): Promise<PrefillResult> {
   const resolvedConfig = resolveConfig(config)
   const registry = await readRegistry(projectRoot, resolvedConfig)
   const history = await listFirstParentHeadHistory(projectRoot)
   const historySet = new Set(history)
   let removedStaleRefCount = 0
+  let removedEmptyEntryCount = 0
 
   const refResolveCache = new Map<string, { ref: string; hash: string | null }>()
   const resolveRefCached = async (ref: string) => {
@@ -77,26 +88,16 @@ export async function prefillChangelog(
     return r
   }
 
-  const entryCountBeforeCleanup = registry.entries.length
-  const cleanedEntries = await Promise.all(
-    registry.entries.map(async (entry) => {
-      const keepRefs: string[] = []
-      for (const ref of entry.refs) {
-        const resolved = await resolveRefCached(ref)
-        if (!resolved.hash || !historySet.has(resolved.hash)) {
-          removedStaleRefCount += 1
-          continue
-        }
-        keepRefs.push(ref)
-      }
-      return {
-        ...entry,
-        refs: keepRefs,
-      }
-    }),
-  )
-  registry.entries = cleanedEntries.filter((entry) => entry.refs.length > 0)
-  const removedEmptyEntryCount = entryCountBeforeCleanup - registry.entries.length
+  if (!options?.skipInitialCleanup) {
+    const cleanupStats = await cleanupRegistryStaleRefs(
+      projectRoot,
+      registry,
+      historySet,
+      resolveRefCached,
+    )
+    removedStaleRefCount = cleanupStats.removedStaleRefCount
+    removedEmptyEntryCount = cleanupStats.removedEmptyEntryCount
+  }
   const existingRefs = registry.entries.flatMap((entry) => entry.refs)
   const registeredHashes = new Set<string>()
   for (const ref of existingRefs) {

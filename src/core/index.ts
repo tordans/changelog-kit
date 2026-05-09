@@ -34,6 +34,12 @@ export {
   type CommitInfo,
 } from './git'
 export { readRegistry, writeRegistry } from './registry'
+export {
+  cleanupRegistryStaleRefs,
+  runRegistryCleanupAndPersist,
+  type RegistryCleanupStats,
+  type ResolveCommitRef,
+} from './cleanup'
 export { buildChangelog } from './build'
-export { prefillChangelog, type PrefillResult } from './prefill'
+export { prefillChangelog, type PrefillOptions, type PrefillResult } from './prefill'
 export { verifyChangelog, type VerifyResult } from './verify'

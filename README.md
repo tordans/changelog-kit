@@ -6,16 +6,16 @@ The goal is an automated reminder workflow that still leaves full control to the
 
 ## Features
 
-- [CLI commands](#cli-usage) to `prefill`, `verify`, and `build` changelog assets
+- [Unified `changelog` CLI](#cli-usage) with composable phases (`cleanup`, `prefill`, `validate`, `generate`) and an optional interactive menu (Clack)
 - [React `ChangelogList` component](#react-usage-list-only) to use in your changelog page
 - [Shared `changelog-update` agent skill](#shared-agent-skill) for commit-to-changelog triage workflows
 
 ## Workflow
 
-- **Manual usage:** run `bun run changelog:prefill` to add missing refs, edit the registry entries (`description`, grouping, `hide`) manually, then run `bun run changelog`.
+- **Manual usage:** run `changelog --prefill` (or `changelog --cleanup --prefill`) to add missing refs, edit the registry entries (`description`, grouping, `hide`) manually, then run `changelog --validate --generate`.
   Note: `prefill` may auto-set `hide: true` for commits that look like non user facing.
-- **Guard:** add a [Husky `pre-push` hook](https://typicode.github.io/husky/get-started.html) that runs `bun run changelog` to verify and build before pushing.
-- **Review:** inspect the registry and generated files after `bun run changelog`, then adjust entries manually if needed before committing.
+- **Guard:** add a [Husky `pre-push` hook](https://typicode.github.io/husky/get-started.html) that runs `changelog --non-interactive --ci --validate --generate` so hooks never wait for prompts.
+- **Review:** inspect the registry and generated files after `changelog --validate --generate`, then adjust entries manually if needed before committing.
 - **LLM:** use the [Shared Agent Skill](#shared-agent-skill) with a prompt like "Update changelog from recent commits, group related commits, and hide non-user-facing work."
 - **Commits:** only user-facing changes belong in the changelog; non-user-facing changelog updates can be opted out with `hide changelog` (also supports `no-changelog` / `no changelog`) in the commit message body.
 - **Custom ignore terms:** pass one or more `--ignore-commit-term` flags to skip recurring commits (for example automated `chore(data):` imports).
@@ -30,20 +30,39 @@ Because this dependency uses `github:tordans/changelog-kit#main`, run `bun updat
 
 ## CLI Usage
 
+The package exposes a single binary: **`changelog`**.
+
+Breaking change from older releases: `changelog-kit-prefill`, `changelog-kit-verify`, and `changelog-kit-build` are removed. See [docs/CLI-MIGRATION.md](docs/CLI-MIGRATION.md) for a mapping table and Husky examples.
+
 Example `package.json` scripts in a consumer project:
 
 ```json
 {
   "scripts": {
-    "changelog": "bun run changelog:verify && bun run changelog:build",
-    "changelog:prefill": "changelog-kit-prefill",
-    "changelog:verify": "changelog-kit-verify",
-    "changelog:build": "changelog-kit-build"
+    "changelog": "changelog --non-interactive --ci --validate --generate",
+    "changelog:prefill": "changelog --non-interactive --cleanup --prefill"
   }
 }
 ```
 
-Shared flags:
+### Phases
+
+Pass any combination of:
+
+| Flag         | Meaning                                      |
+| ------------ | -------------------------------------------- |
+| `--cleanup`  | Remove stale refs and empty registry entries |
+| `--prefill`  | Draft registry entries for missing commits   |
+| `--validate` | Verify registry consistency and coverage     |
+| `--generate` | Write `CHANGELOG.md` and JSON output         |
+
+**Order is always** `cleanup → prefill → validate → generate`, regardless of how flags are ordered on the command line.
+
+Aliases: `--prefill-cleanup` (same as `--cleanup --prefill`), `--validate-generate` (same as `--validate --generate`).
+
+With no phase flags in a TTY, `changelog` opens an interactive menu. In CI or when stdin is not a TTY, pass explicit flags (use `--non-interactive` / `--ci` in scripts so missing flags fail fast instead of hanging).
+
+### Shared flags
 
 - `--registry-path changelog.registry.yaml`
   Reads changelog entries from this registry file.
@@ -62,9 +81,18 @@ Shared flags:
   Skips commits whose message contains the given term (case-insensitive).
   > Default: not set
 
+### Runtime flags
+
+- `--non-interactive` — require explicit phase flags (no interactive menu)
+- `--ci` — stable, non-interactive-oriented behavior
+- `--quiet` — less human-oriented logging
+- `--json` — print one JSON summary object to stdout at the end (no decorative Clack output mixed in)
+- `--no-color` — disable ANSI colors
+- `--help`, `--version`
+
 ## Development
 
-- `bun test` runs unit checks (predicate semantics, git stdout parsing).
+- `bun test` runs unit checks (predicate semantics, git stdout parsing, CLI argv parsing).
 - `bun run bench:prefill` prints a coarse wall-clock time for `prefillChangelog` on the repo in `process.cwd()` (creates a disposable empty registry next to `--registry-path`). Compare against an older checkout with `hyperfine 'bun run bench:prefill'` or `git worktree`.
 
 ## Shared Agent Skill
