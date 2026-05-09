@@ -7,11 +7,15 @@ import * as p from '@clack/prompts'
 
 import {
   buildChangelog,
+  parsePostRewriteStdin,
   prefillChangelog,
   resolveConfig,
+  runGit,
   runRegistryCleanupAndPersist,
+  runRegistryRemapAndPersist,
   shortHash,
   verifyChangelog,
+  type RemapPair,
 } from '../core'
 import {
   anyPhaseSelected,
@@ -68,12 +72,38 @@ Runtime:
   --help
   --version
 
+Rebase / amend (Husky post-rewrite):
+  --remap-refs           Read "<old-oid> <new-oid>" lines from stdin (git post-rewrite),
+                         rewrite matching registry refs, then exit (no phase flags).
+                         Use from a .husky/post-rewrite hook after rebase or amend.
+
 Examples:
   changelog --validate
   changelog --validate --generate
   changelog --cleanup --prefill --validate
   changelog --non-interactive --ci --validate --generate
 `)
+}
+
+async function resolvePostRewriteOid(projectRoot: string, token: string): Promise<string | null> {
+  if (/^[0-9a-f]{40}$/i.test(token)) return token.toLowerCase()
+  const raw = await runGit(['rev-parse', '--verify', `${token}^{commit}`], {
+    cwd: projectRoot,
+    acceptNonZero: true,
+  })
+  const line = raw.split('\n')[0]?.trim().toLowerCase() ?? ''
+  return /^[0-9a-f]{40}$/i.test(line) ? line : null
+}
+
+async function normalizeRemapPairs(projectRoot: string, raw: RemapPair[]): Promise<RemapPair[]> {
+  const out: RemapPair[] = []
+  for (const { oldHash, newHash } of raw) {
+    const oldFull = await resolvePostRewriteOid(projectRoot, oldHash)
+    const newFull = await resolvePostRewriteOid(projectRoot, newHash)
+    if (!oldFull || !newFull) continue
+    out.push({ oldHash: oldFull, newHash: newFull })
+  }
+  return out
 }
 
 function mapMenuChoiceToPhases(choice: string): PhaseSelection {
@@ -114,6 +144,54 @@ async function main(): Promise<void> {
   }
   if (runtime.version) {
     console.log(readPackageVersion())
+    return
+  }
+
+  if (runtime.remapRefs) {
+    const stdinText = readFileSync(0, 'utf8')
+    const { pairs: rawPairs, warnings } = parsePostRewriteStdin(stdinText)
+    for (const w of warnings) {
+      if (!runtime.quiet && !runtime.json) console.warn(`[changelog-kit:remap-refs] ${w}`)
+    }
+    const pairs = await normalizeRemapPairs(projectRoot, rawPairs)
+    const stats = await runRegistryRemapAndPersist(projectRoot, pairs, config)
+    const resolved = resolveConfig(config)
+    const registryAbsPath = path.join(projectRoot, resolved.registryPath)
+
+    const summary = {
+      phases: [] as ChangelogPhase[],
+      version: readPackageVersion(),
+      steps: {
+        'remap-refs': {
+          remappedRefCount: stats.remappedRefCount,
+          touchedEntryCount: stats.touchedEntryCount,
+          pairLineCount: rawPairs.length,
+        },
+      },
+    }
+
+    if (!runtime.quiet && !runtime.json) {
+      p.log.info(`[changelog-kit:remap-refs] Registry file: ${registryAbsPath}`)
+      if (rawPairs.length === 0) {
+        p.log.info('[changelog-kit:remap-refs] No post-rewrite pairs on stdin; registry unchanged.')
+      } else if (pairs.length === 0) {
+        p.log.info(
+          '[changelog-kit:remap-refs] No valid full oids after git rev-parse; registry unchanged.',
+        )
+      } else if (stats.remappedRefCount === 0) {
+        p.log.info(
+          '[changelog-kit:remap-refs] No registry refs matched stdin pairs; registry unchanged.',
+        )
+      } else {
+        p.log.info(
+          `[changelog-kit:remap-refs] Remapped ${stats.remappedRefCount} ref(s) across ${stats.touchedEntryCount} entr${stats.touchedEntryCount === 1 ? 'y' : 'ies'}.`,
+        )
+      }
+    }
+
+    if (runtime.json) {
+      console.log(JSON.stringify(summary))
+    }
     return
   }
 

@@ -1,6 +1,6 @@
 {
   "name": "@tordans/changelog-kit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Shared changelog scripts and React list component to manage and generate user facing changelogs.",
   "license": "MIT",
   "repository": {

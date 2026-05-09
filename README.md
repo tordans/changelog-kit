@@ -20,6 +20,35 @@ The goal is an automated reminder workflow that still leaves full control to the
 - **Commits:** only user-facing changes belong in the changelog; non-user-facing changelog updates can be opted out with `hide changelog` (also supports `no-changelog` / `no changelog`) in the commit message body.
 - **Custom ignore terms:** pass one or more `--ignore-commit-term` flags to skip recurring commits (for example automated `chore(data):` imports).
 
+### Rebase-safe registry
+
+After `git pull --rebase`, `git rebase`, or `git commit --amend`, commit SHAs change. Without a remap step, a later `changelog --cleanup` can drop registry refs that no longer exist on the rewritten history, which loses handwritten `descriptionMd` for those entries.
+
+Run `changelog --remap-refs` from a Husky **`post-rewrite`** hook so Git’s `<old-sha> <new-sha>` lines on stdin update the registry in place (short and full refs are preserved; squashed duplicates are deduped).
+
+Example `.husky/post-rewrite`:
+
+```sh
+#!/usr/bin/env sh
+cd "$(dirname -- "$0")/.." || exit 1
+
+case "$1" in
+  rebase|amend)
+    bun run changelog:remap
+    ;;
+esac
+```
+
+Consumer `package.json` script (stdin is inherited from the hook; no extra redirection needed):
+
+```json
+{
+  "scripts": {
+    "changelog:remap": "changelog --non-interactive --ci --remap-refs"
+  }
+}
+```
+
 ## Install
 
 ```bash
@@ -59,6 +88,8 @@ Pass any combination of:
 **Order is always** `cleanup → prefill → validate → generate`, regardless of how flags are ordered on the command line.
 
 Aliases: `--prefill-cleanup` (same as `--cleanup --prefill`), `--validate-generate` (same as `--validate --generate`).
+
+Standalone: `--remap-refs` reads git post-rewrite lines from stdin and updates the registry only (no phase pipeline). Combine with `--non-interactive` / `--ci` in hooks.
 
 With no phase flags in a TTY, `changelog` opens an interactive menu. In CI or when stdin is not a TTY, pass explicit flags (use `--non-interactive` / `--ci` in scripts so missing flags fail fast instead of hanging).
 

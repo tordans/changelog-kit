@@ -36,6 +36,10 @@ Aliases:
 - `--prefill-cleanup` → same as `--cleanup --prefill`
 - `--validate-generate` → same as `--validate --generate`
 
+## Remap after rebase (`--remap-refs`)
+
+`changelog --remap-refs` is a standalone mode (not a phase flag). It reads `<old-oid> <new-oid>` lines from stdin (as written by Git’s `post-rewrite` hook), remaps matching registry refs to the new commits, and exits. Typical usage from `.husky/post-rewrite` after `rebase` or `amend`, with a script such as `changelog --non-interactive --ci --remap-refs`.
+
 ## Husky and CI
 
 Use `--non-interactive` (and usually `--ci`) so the CLI never waits for an interactive menu when no phases are passed:

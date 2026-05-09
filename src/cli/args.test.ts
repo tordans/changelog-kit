@@ -26,4 +26,10 @@ describe('parseChangelogCliArgv', () => {
   test('boolean flag must not take a value', () => {
     expect(() => parseChangelogCliArgv(['--cleanup', 'oops'])).toThrow(/does not take a value/)
   })
+
+  test('--remap-refs is recognized as a boolean runtime flag', () => {
+    const p = parseChangelogCliArgv(['--remap-refs', '--project-root', '/tmp'])
+    expect(p.runtime.remapRefs).toBe(true)
+    expect(p.projectRoot).toBe('/tmp')
+  })
 })

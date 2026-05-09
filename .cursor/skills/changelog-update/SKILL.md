@@ -22,3 +22,4 @@ Rules:
 - Registry file default: `changelog.registry.yaml` (override via config or `--registry-path`).
 - Visible entry shape: `refs` + `descriptionMd`.
 - Hidden entry shape: `refs` + `hide: true` (no description).
+- After a rebase or amend, SHAs change: run `changelog --remap-refs` from a Husky `post-rewrite` hook (or manually with stdin from Git) so refs stay aligned. Otherwise `--cleanup` can treat old refs as stale and remove entries, losing `descriptionMd` text.

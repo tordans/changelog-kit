@@ -40,6 +40,13 @@ export {
   type RegistryCleanupStats,
   type ResolveCommitRef,
 } from './cleanup'
+export {
+  parsePostRewriteStdin,
+  remapRegistryRefs,
+  runRegistryRemapAndPersist,
+  type RegistryRemapStats,
+  type RemapPair,
+} from './remap'
 export { buildChangelog } from './build'
 export { prefillChangelog, type PrefillOptions, type PrefillResult } from './prefill'
 export { verifyChangelog, type VerifyResult } from './verify'

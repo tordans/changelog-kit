@@ -9,6 +9,7 @@ const KNOWN_FLAG_KEYS = new Set([
   'generate',
   'prefill-cleanup',
   'validate-generate',
+  'remap-refs',
   'non-interactive',
   'ci',
   'quiet',
@@ -38,6 +39,7 @@ const BOOLEAN_FLAGS = new Set([
   'generate',
   'prefill-cleanup',
   'validate-generate',
+  'remap-refs',
   'non-interactive',
   'ci',
   'quiet',
@@ -114,6 +116,7 @@ export type RuntimeCliOptions = {
   noColor: boolean
   help: boolean
   version: boolean
+  remapRefs: boolean
 }
 
 export type ParsedChangelogCli = {
@@ -169,6 +172,7 @@ export function parseChangelogCliArgv(argv: string[]): ParsedChangelogCli {
     noColor: hasFlag(args, 'no-color'),
     help: hasFlag(args, 'help'),
     version: hasFlag(args, 'version'),
+    remapRefs: hasFlag(args, 'remap-refs'),
   }
 
   return { projectRoot, config, phases, runtime }
