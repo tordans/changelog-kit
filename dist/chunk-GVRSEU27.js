@@ -344,6 +344,81 @@ async function runRegistryCleanupAndPersist(projectRoot, config) {
   }
   return stats;
 }
+
+// src/core/remap.ts
+function isHexOid(token) {
+  return token.length > 0 && /^[0-9a-f]+$/i.test(token);
+}
+function parsePostRewriteStdin(text) {
+  const pairs = [];
+  const warnings = [];
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]?.trim() ?? "";
+    if (!line) continue;
+    const parts = line.split(/\s+/).filter(Boolean);
+    const oldRaw = parts[0];
+    const newRaw = parts[1];
+    if (!oldRaw || !newRaw) {
+      warnings.push(`post-rewrite line ${i + 1}: expected two oid tokens, skipping`);
+      continue;
+    }
+    if (!isHexOid(oldRaw) || !isHexOid(newRaw)) {
+      warnings.push(`post-rewrite line ${i + 1}: non-hex oid token(s), skipping`);
+      continue;
+    }
+    pairs.push({
+      oldHash: oldRaw.toLowerCase(),
+      newHash: newRaw.toLowerCase()
+    });
+  }
+  return { pairs, warnings };
+}
+function remapSingleRef(ref, pairs) {
+  for (const { oldHash, newHash } of pairs) {
+    if (!oldHash.startsWith(ref)) continue;
+    const newPrefix = newHash.slice(0, ref.length);
+    if (ref === newPrefix) return null;
+    return newPrefix;
+  }
+  return null;
+}
+function dedupeRefsInOrder(refs) {
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  for (const r of refs) {
+    if (seen.has(r)) continue;
+    seen.add(r);
+    out.push(r);
+  }
+  return out;
+}
+function remapRegistryRefs(registry, pairs) {
+  let remappedRefCount = 0;
+  let touchedEntryCount = 0;
+  for (const entry of registry.entries) {
+    const prevRefs = [...entry.refs];
+    const nextRefs = entry.refs.map((ref) => {
+      const mapped = remapSingleRef(ref, pairs);
+      if (mapped == null) return ref;
+      remappedRefCount += 1;
+      return mapped;
+    });
+    entry.refs = dedupeRefsInOrder(nextRefs);
+    const changed = prevRefs.length !== entry.refs.length || prevRefs.some((r, idx) => r !== entry.refs[idx]);
+    if (changed) touchedEntryCount += 1;
+  }
+  return { remappedRefCount, touchedEntryCount };
+}
+async function runRegistryRemapAndPersist(projectRoot, pairs, config) {
+  const resolvedConfig = resolveConfig(config);
+  const registry = await readRegistry(projectRoot, resolvedConfig);
+  const stats = remapRegistryRefs(registry, pairs);
+  if (stats.remappedRefCount > 0) {
+    await writeRegistry(projectRoot, registry, resolvedConfig);
+  }
+  return stats;
+}
 function normalizeMarkdownBody(markdown) {
   return markdown.trim().replace(/\n{3,}/g, "\n\n");
 }
@@ -696,6 +771,6 @@ async function verifyChangelog(projectRoot, config) {
   };
 }
 
-export { DEFAULT_JSON_PATH, DEFAULT_MARKDOWN_PATH, DEFAULT_REGISTRY_PATH, buildChangelog, cleanupRegistryStaleRefs, isChangelogOnlyCommit, isChangelogOnlyFromPaths, isChangelogOnlyPath, isChangelogOptOutCommit, isChangelogOptOutFromCommit, isChangelogOptOutText, isIgnoredByTerms, isIgnoredCommit, isIgnoredFromCommit, listCommitChangedPaths, listCommitsChangedPathsBatch, listFirstParentHeadHistory, monthKeyFromIsoDate, normalizePathForGit, parseNameOnlyChunkMarkerLogStdout, prefillChangelog, readCommitInfo, readCommitsInfoBatch, readRegistry, resolveCommitRef, resolveConfig, runGit, runRegistryCleanupAndPersist, shortHash, sliceCommitsSinceAnchor, verifyChangelog, writeRegistry };
-//# sourceMappingURL=chunk-XB2L2E3E.js.map
-//# sourceMappingURL=chunk-XB2L2E3E.js.map
+export { DEFAULT_JSON_PATH, DEFAULT_MARKDOWN_PATH, DEFAULT_REGISTRY_PATH, buildChangelog, cleanupRegistryStaleRefs, isChangelogOnlyCommit, isChangelogOnlyFromPaths, isChangelogOnlyPath, isChangelogOptOutCommit, isChangelogOptOutFromCommit, isChangelogOptOutText, isIgnoredByTerms, isIgnoredCommit, isIgnoredFromCommit, listCommitChangedPaths, listCommitsChangedPathsBatch, listFirstParentHeadHistory, monthKeyFromIsoDate, normalizePathForGit, parseNameOnlyChunkMarkerLogStdout, parsePostRewriteStdin, prefillChangelog, readCommitInfo, readCommitsInfoBatch, readRegistry, remapRegistryRefs, resolveCommitRef, resolveConfig, runGit, runRegistryCleanupAndPersist, runRegistryRemapAndPersist, shortHash, sliceCommitsSinceAnchor, verifyChangelog, writeRegistry };
+//# sourceMappingURL=chunk-GVRSEU27.js.map
+//# sourceMappingURL=chunk-GVRSEU27.js.map

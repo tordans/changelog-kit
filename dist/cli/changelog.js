@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 import { readFileSync } from 'fs';
-import path2 from 'path';
+import path5 from 'path';
 import { fileURLToPath } from 'url';
 import * as p from '@clack/prompts';
 import { intro, select, isCancel, outro } from '@clack/prompts';
 import { spawn } from 'child_process';
-import { writeFile, mkdir, readFile } from 'fs/promises';
+import { readFile, mkdir, writeFile } from 'fs/promises';
 import { z } from 'zod';
 
 var DEFAULT_REGISTRY_PATH = "changelog.registry.yaml";
 var DEFAULT_MARKDOWN_PATH = "CHANGELOG.md";
-var DEFAULT_JSON_PATH = path2.join("public", "changelog.gen.json");
+var DEFAULT_JSON_PATH = path5.join("public", "changelog.gen.json");
 function normalizePathForGit(relPath) {
   return relPath.replace(/\\/g, "/");
 }
@@ -321,15 +321,15 @@ z.object({
 // src/core/registry.ts
 async function readRegistry(projectRoot, config) {
   const resolved = config ?? resolveConfig();
-  const abs = path2.join(projectRoot, resolved.registryPath);
+  const abs = path5.join(projectRoot, resolved.registryPath);
   const text = await readFile(abs, "utf8");
   const parsed = (await import('yaml')).parse(text);
   return changelogRegistrySchema.parse(parsed);
 }
 async function writeRegistry(projectRoot, registry, config) {
   const resolved = config ?? resolveConfig();
-  const abs = path2.join(projectRoot, resolved.registryPath);
-  await mkdir(path2.dirname(abs), { recursive: true });
+  const abs = path5.join(projectRoot, resolved.registryPath);
+  await mkdir(path5.dirname(abs), { recursive: true });
   const lines = ["entries:"];
   for (const entry of registry.entries) {
     lines.push("  - refs:");
@@ -390,6 +390,81 @@ async function runRegistryCleanupAndPersist(projectRoot, config) {
   };
   const stats = await cleanupRegistryStaleRefs(projectRoot, registry, historySet, resolveRefCached);
   if (stats.removedStaleRefCount > 0 || stats.removedEmptyEntryCount > 0) {
+    await writeRegistry(projectRoot, registry, resolvedConfig);
+  }
+  return stats;
+}
+
+// src/core/remap.ts
+function isHexOid(token) {
+  return token.length > 0 && /^[0-9a-f]+$/i.test(token);
+}
+function parsePostRewriteStdin(text) {
+  const pairs = [];
+  const warnings = [];
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]?.trim() ?? "";
+    if (!line) continue;
+    const parts = line.split(/\s+/).filter(Boolean);
+    const oldRaw = parts[0];
+    const newRaw = parts[1];
+    if (!oldRaw || !newRaw) {
+      warnings.push(`post-rewrite line ${i + 1}: expected two oid tokens, skipping`);
+      continue;
+    }
+    if (!isHexOid(oldRaw) || !isHexOid(newRaw)) {
+      warnings.push(`post-rewrite line ${i + 1}: non-hex oid token(s), skipping`);
+      continue;
+    }
+    pairs.push({
+      oldHash: oldRaw.toLowerCase(),
+      newHash: newRaw.toLowerCase()
+    });
+  }
+  return { pairs, warnings };
+}
+function remapSingleRef(ref, pairs) {
+  for (const { oldHash, newHash } of pairs) {
+    if (!oldHash.startsWith(ref)) continue;
+    const newPrefix = newHash.slice(0, ref.length);
+    if (ref === newPrefix) return null;
+    return newPrefix;
+  }
+  return null;
+}
+function dedupeRefsInOrder(refs) {
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  for (const r of refs) {
+    if (seen.has(r)) continue;
+    seen.add(r);
+    out.push(r);
+  }
+  return out;
+}
+function remapRegistryRefs(registry, pairs) {
+  let remappedRefCount = 0;
+  let touchedEntryCount = 0;
+  for (const entry of registry.entries) {
+    const prevRefs = [...entry.refs];
+    const nextRefs = entry.refs.map((ref) => {
+      const mapped = remapSingleRef(ref, pairs);
+      if (mapped == null) return ref;
+      remappedRefCount += 1;
+      return mapped;
+    });
+    entry.refs = dedupeRefsInOrder(nextRefs);
+    const changed = prevRefs.length !== entry.refs.length || prevRefs.some((r, idx) => r !== entry.refs[idx]);
+    if (changed) touchedEntryCount += 1;
+  }
+  return { remappedRefCount, touchedEntryCount };
+}
+async function runRegistryRemapAndPersist(projectRoot, pairs, config) {
+  const resolvedConfig = resolveConfig(config);
+  const registry = await readRegistry(projectRoot, resolvedConfig);
+  const stats = remapRegistryRefs(registry, pairs);
+  if (stats.remappedRefCount > 0) {
     await writeRegistry(projectRoot, registry, resolvedConfig);
   }
   return stats;
@@ -459,10 +534,10 @@ async function buildChangelog(projectRoot, config) {
     byMonth.set(entry.month, rows);
   }
   const markdown = renderMarkdown(byMonth, resolvedConfig.registryPath);
-  const changelogMdAbs = path2.join(projectRoot, resolvedConfig.outputMarkdownPath);
+  const changelogMdAbs = path5.join(projectRoot, resolvedConfig.outputMarkdownPath);
   await writeFile(changelogMdAbs, markdown, "utf8");
-  const jsonAbs = path2.join(projectRoot, resolvedConfig.outputJsonPath);
-  await mkdir(path2.dirname(jsonAbs), { recursive: true });
+  const jsonAbs = path5.join(projectRoot, resolvedConfig.outputJsonPath);
+  await mkdir(path5.dirname(jsonAbs), { recursive: true });
   const monthKeys = Array.from(byMonth.keys()).sort((a, b) => b.localeCompare(a));
   const payload = {
     generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -628,7 +703,7 @@ async function prefillChangelog(projectRoot, config, options) {
 }
 async function verifyChangelog(projectRoot, config) {
   const resolvedConfig = resolveConfig(config);
-  const registryAbsPath = path2.join(projectRoot, resolvedConfig.registryPath);
+  const registryAbsPath = path5.join(projectRoot, resolvedConfig.registryPath);
   const registry = await readRegistry(projectRoot, resolvedConfig);
   const remediation = [
     `[changelog:verify] Registry file: ${registryAbsPath}`,
@@ -754,6 +829,7 @@ var KNOWN_FLAG_KEYS = /* @__PURE__ */ new Set([
   "generate",
   "prefill-cleanup",
   "validate-generate",
+  "remap-refs",
   "non-interactive",
   "ci",
   "quiet",
@@ -781,6 +857,7 @@ var BOOLEAN_FLAGS = /* @__PURE__ */ new Set([
   "generate",
   "prefill-cleanup",
   "validate-generate",
+  "remap-refs",
   "non-interactive",
   "ci",
   "quiet",
@@ -863,7 +940,8 @@ function parseChangelogCliArgv(argv) {
     json: hasFlag(args, "json"),
     noColor: hasFlag(args, "no-color"),
     help: hasFlag(args, "help"),
-    version: hasFlag(args, "version")
+    version: hasFlag(args, "version"),
+    remapRefs: hasFlag(args, "remap-refs")
   };
   return { projectRoot, config, phases, runtime };
 }
@@ -873,8 +951,8 @@ function anyPhaseSelected(phases) {
 
 // src/cli/changelog.ts
 function readPackageVersion() {
-  const pkgPath = path2.join(
-    path2.dirname(fileURLToPath(import.meta.url)),
+  const pkgPath = path5.join(
+    path5.dirname(fileURLToPath(import.meta.url)),
     "..",
     "..",
     "package.json"
@@ -918,12 +996,36 @@ Runtime:
   --help
   --version
 
+Rebase / amend (Husky post-rewrite):
+  --remap-refs           Read "<old-oid> <new-oid>" lines from stdin (git post-rewrite),
+                         rewrite matching registry refs, then exit (no phase flags).
+                         Use from a .husky/post-rewrite hook after rebase or amend.
+
 Examples:
   changelog --validate
   changelog --validate --generate
   changelog --cleanup --prefill --validate
   changelog --non-interactive --ci --validate --generate
 `);
+}
+async function resolvePostRewriteOid(projectRoot, token) {
+  if (/^[0-9a-f]{40}$/i.test(token)) return token.toLowerCase();
+  const raw = await runGit(["rev-parse", "--verify", `${token}^{commit}`], {
+    cwd: projectRoot,
+    acceptNonZero: true
+  });
+  const line = raw.split("\n")[0]?.trim().toLowerCase() ?? "";
+  return /^[0-9a-f]{40}$/i.test(line) ? line : null;
+}
+async function normalizeRemapPairs(projectRoot, raw) {
+  const out = [];
+  for (const { oldHash, newHash } of raw) {
+    const oldFull = await resolvePostRewriteOid(projectRoot, oldHash);
+    const newFull = await resolvePostRewriteOid(projectRoot, newHash);
+    if (!oldFull || !newFull) continue;
+    out.push({ oldHash: oldFull, newHash: newFull });
+  }
+  return out;
 }
 function mapMenuChoiceToPhases(choice) {
   switch (choice) {
@@ -959,6 +1061,50 @@ async function main() {
   }
   if (runtime.version) {
     console.log(readPackageVersion());
+    return;
+  }
+  if (runtime.remapRefs) {
+    const stdinText = readFileSync(0, "utf8");
+    const { pairs: rawPairs, warnings } = parsePostRewriteStdin(stdinText);
+    for (const w of warnings) {
+      if (!runtime.quiet && !runtime.json) console.warn(`[changelog-kit:remap-refs] ${w}`);
+    }
+    const pairs = await normalizeRemapPairs(projectRoot, rawPairs);
+    const stats = await runRegistryRemapAndPersist(projectRoot, pairs, config);
+    const resolved2 = resolveConfig(config);
+    const registryAbsPath2 = path5.join(projectRoot, resolved2.registryPath);
+    const summary2 = {
+      phases: [],
+      version: readPackageVersion(),
+      steps: {
+        "remap-refs": {
+          remappedRefCount: stats.remappedRefCount,
+          touchedEntryCount: stats.touchedEntryCount,
+          pairLineCount: rawPairs.length
+        }
+      }
+    };
+    if (!runtime.quiet && !runtime.json) {
+      p.log.info(`[changelog-kit:remap-refs] Registry file: ${registryAbsPath2}`);
+      if (rawPairs.length === 0) {
+        p.log.info("[changelog-kit:remap-refs] No post-rewrite pairs on stdin; registry unchanged.");
+      } else if (pairs.length === 0) {
+        p.log.info(
+          "[changelog-kit:remap-refs] No valid full oids after git rev-parse; registry unchanged."
+        );
+      } else if (stats.remappedRefCount === 0) {
+        p.log.info(
+          "[changelog-kit:remap-refs] No registry refs matched stdin pairs; registry unchanged."
+        );
+      } else {
+        p.log.info(
+          `[changelog-kit:remap-refs] Remapped ${stats.remappedRefCount} ref(s) across ${stats.touchedEntryCount} entr${stats.touchedEntryCount === 1 ? "y" : "ies"}.`
+        );
+      }
+    }
+    if (runtime.json) {
+      console.log(JSON.stringify(summary2));
+    }
     return;
   }
   const mustAvoidPrompts = runtime.nonInteractive || runtime.ci;
@@ -1019,7 +1165,7 @@ async function main() {
     steps: {}
   };
   const resolved = resolveConfig(config);
-  const registryAbsPath = path2.join(projectRoot, resolved.registryPath);
+  const registryAbsPath = path5.join(projectRoot, resolved.registryPath);
   const runPhase = async (phase) => {
     if (phase === "cleanup") {
       const stats = await runRegistryCleanupAndPersist(projectRoot, config);

@@ -101,6 +101,33 @@ declare function cleanupRegistryStaleRefs(projectRoot: string, registry: Changel
  */
 declare function runRegistryCleanupAndPersist(projectRoot: string, config?: ChangelogKitConfig): Promise<RegistryCleanupStats>;
 
+type RemapPair = {
+    oldHash: string;
+    newHash: string;
+};
+type RegistryRemapStats = {
+    remappedRefCount: number;
+    touchedEntryCount: number;
+};
+/**
+ * Parses `git` post-rewrite stdin: each line is `<old-oid> <new-oid>` with an optional third column (ignored).
+ * Invalid lines are skipped; warnings describe skipped lines for logging.
+ */
+declare function parsePostRewriteStdin(text: string): {
+    pairs: RemapPair[];
+    warnings: string[];
+};
+/**
+ * Rewrites registry `refs` using post-rewrite oid pairs: for each ref, if some `oldHash` starts with that ref
+ * (prefix match for short or full stored refs), replace with `newHash` truncated to the same length.
+ * Dedupes refs per entry after substitution (squash collapse). Mutates `registry` in place.
+ */
+declare function remapRegistryRefs(registry: ChangelogRegistry, pairs: RemapPair[]): RegistryRemapStats;
+/**
+ * Reads the registry, applies ref remaps from post-rewrite pairs, and persists only when refs changed.
+ */
+declare function runRegistryRemapAndPersist(projectRoot: string, pairs: RemapPair[], config?: ChangelogKitConfig): Promise<RegistryRemapStats>;
+
 declare function buildChangelog(projectRoot: string, config?: ChangelogKitConfig): Promise<{
     payload: ChangelogFile;
     wroteJson: boolean;
@@ -133,4 +160,4 @@ type VerifyResult = {
 };
 declare function verifyChangelog(projectRoot: string, config?: ChangelogKitConfig): Promise<VerifyResult>;
 
-export { type ChangelogKitConfig, type ChangelogKitResolvedConfig, type CommitInfo, type CoverageSlice, DEFAULT_JSON_PATH, DEFAULT_MARKDOWN_PATH, DEFAULT_REGISTRY_PATH, type PrefillOptions, type PrefillResult, type RegistryCleanupStats, type ResolveCommitRef, type VerifyResult, buildChangelog, cleanupRegistryStaleRefs, isChangelogOnlyCommit, isChangelogOnlyFromPaths, isChangelogOnlyPath, isChangelogOptOutCommit, isChangelogOptOutFromCommit, isChangelogOptOutText, isIgnoredByTerms, isIgnoredCommit, isIgnoredFromCommit, listCommitChangedPaths, listCommitsChangedPathsBatch, listFirstParentHeadHistory, monthKeyFromIsoDate, normalizePathForGit, parseNameOnlyChunkMarkerLogStdout, prefillChangelog, readCommitInfo, readCommitsInfoBatch, readRegistry, resolveCommitRef, resolveConfig, runGit, runRegistryCleanupAndPersist, shortHash, sliceCommitsSinceAnchor, verifyChangelog, writeRegistry };
+export { type ChangelogKitConfig, type ChangelogKitResolvedConfig, type CommitInfo, type CoverageSlice, DEFAULT_JSON_PATH, DEFAULT_MARKDOWN_PATH, DEFAULT_REGISTRY_PATH, type PrefillOptions, type PrefillResult, type RegistryCleanupStats, type RegistryRemapStats, type RemapPair, type ResolveCommitRef, type VerifyResult, buildChangelog, cleanupRegistryStaleRefs, isChangelogOnlyCommit, isChangelogOnlyFromPaths, isChangelogOnlyPath, isChangelogOptOutCommit, isChangelogOptOutFromCommit, isChangelogOptOutText, isIgnoredByTerms, isIgnoredCommit, isIgnoredFromCommit, listCommitChangedPaths, listCommitsChangedPathsBatch, listFirstParentHeadHistory, monthKeyFromIsoDate, normalizePathForGit, parseNameOnlyChunkMarkerLogStdout, parsePostRewriteStdin, prefillChangelog, readCommitInfo, readCommitsInfoBatch, readRegistry, remapRegistryRefs, resolveCommitRef, resolveConfig, runGit, runRegistryCleanupAndPersist, runRegistryRemapAndPersist, shortHash, sliceCommitsSinceAnchor, verifyChangelog, writeRegistry };
