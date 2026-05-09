@@ -1,5 +1,6 @@
-import type { ChangelogFile } from '../schemas'
 import { micromark } from 'micromark'
+
+import type { ChangelogFile } from '../schemas'
 
 export type ChangelogListLabels = {
   empty: string
