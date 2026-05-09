@@ -299,6 +299,51 @@ async function writeRegistry(projectRoot, registry, config) {
 `;
   await writeFile(abs, yaml, "utf8");
 }
+
+// src/core/cleanup.ts
+async function cleanupRegistryStaleRefs(projectRoot, registry, historySet, resolveRef) {
+  let removedStaleRefCount = 0;
+  const entryCountBeforeCleanup = registry.entries.length;
+  const cleanedEntries = await Promise.all(
+    registry.entries.map(async (entry) => {
+      const keepRefs = [];
+      for (const ref of entry.refs) {
+        const resolved = await resolveRef(ref);
+        if (!resolved.hash || !historySet.has(resolved.hash)) {
+          removedStaleRefCount += 1;
+          continue;
+        }
+        keepRefs.push(ref);
+      }
+      return {
+        ...entry,
+        refs: keepRefs
+      };
+    })
+  );
+  registry.entries = cleanedEntries.filter((entry) => entry.refs.length > 0);
+  const removedEmptyEntryCount = entryCountBeforeCleanup - registry.entries.length;
+  return { removedStaleRefCount, removedEmptyEntryCount };
+}
+async function runRegistryCleanupAndPersist(projectRoot, config) {
+  const resolvedConfig = resolveConfig(config);
+  const registry = await readRegistry(projectRoot, resolvedConfig);
+  const history = await listFirstParentHeadHistory(projectRoot);
+  const historySet = new Set(history);
+  const refResolveCache = /* @__PURE__ */ new Map();
+  const resolveRefCached = async (ref) => {
+    const hit = refResolveCache.get(ref);
+    if (hit) return hit;
+    const r = await resolveCommitRef(projectRoot, ref);
+    refResolveCache.set(ref, r);
+    return r;
+  };
+  const stats = await cleanupRegistryStaleRefs(projectRoot, registry, historySet, resolveRefCached);
+  if (stats.removedStaleRefCount > 0 || stats.removedEmptyEntryCount > 0) {
+    await writeRegistry(projectRoot, registry, resolvedConfig);
+  }
+  return stats;
+}
 function normalizeMarkdownBody(markdown) {
   return markdown.trim().replace(/\n{3,}/g, "\n\n");
 }
@@ -424,12 +469,13 @@ function draftDescription(subject, body) {
   return `${cleanSubject}
 ${firstLine}`;
 }
-async function prefillChangelog(projectRoot, config) {
+async function prefillChangelog(projectRoot, config, options) {
   const resolvedConfig = resolveConfig(config);
   const registry = await readRegistry(projectRoot, resolvedConfig);
   const history = await listFirstParentHeadHistory(projectRoot);
   const historySet = new Set(history);
   let removedStaleRefCount = 0;
+  let removedEmptyEntryCount = 0;
   const refResolveCache = /* @__PURE__ */ new Map();
   const resolveRefCached = async (ref) => {
     const hit = refResolveCache.get(ref);
@@ -438,26 +484,16 @@ async function prefillChangelog(projectRoot, config) {
     refResolveCache.set(ref, r);
     return r;
   };
-  const entryCountBeforeCleanup = registry.entries.length;
-  const cleanedEntries = await Promise.all(
-    registry.entries.map(async (entry) => {
-      const keepRefs = [];
-      for (const ref of entry.refs) {
-        const resolved = await resolveRefCached(ref);
-        if (!resolved.hash || !historySet.has(resolved.hash)) {
-          removedStaleRefCount += 1;
-          continue;
-        }
-        keepRefs.push(ref);
-      }
-      return {
-        ...entry,
-        refs: keepRefs
-      };
-    })
-  );
-  registry.entries = cleanedEntries.filter((entry) => entry.refs.length > 0);
-  const removedEmptyEntryCount = entryCountBeforeCleanup - registry.entries.length;
+  if (!options?.skipInitialCleanup) {
+    const cleanupStats = await cleanupRegistryStaleRefs(
+      projectRoot,
+      registry,
+      historySet,
+      resolveRefCached
+    );
+    removedStaleRefCount = cleanupStats.removedStaleRefCount;
+    removedEmptyEntryCount = cleanupStats.removedEmptyEntryCount;
+  }
   const existingRefs = registry.entries.flatMap((entry) => entry.refs);
   const registeredHashes = /* @__PURE__ */ new Set();
   for (const ref of existingRefs) {
@@ -546,8 +582,8 @@ async function verifyChangelog(projectRoot, config) {
   const registry = await readRegistry(projectRoot, resolvedConfig);
   const remediation = [
     `[changelog:verify] Registry file: ${registryAbsPath}`,
-    "[changelog:verify] Next step: bun run changelog:prefill",
-    "[changelog:verify] Then run: bun run changelog:verify"
+    "[changelog:verify] Next step: changelog --cleanup --prefill",
+    "[changelog:verify] Then run: changelog --validate"
   ];
   const resolvedRows = [];
   for (let entryIndex = 0; entryIndex < registry.entries.length; entryIndex += 1) {
@@ -660,6 +696,6 @@ async function verifyChangelog(projectRoot, config) {
   };
 }
 
-export { DEFAULT_JSON_PATH, DEFAULT_MARKDOWN_PATH, DEFAULT_REGISTRY_PATH, buildChangelog, isChangelogOnlyCommit, isChangelogOnlyFromPaths, isChangelogOnlyPath, isChangelogOptOutCommit, isChangelogOptOutFromCommit, isChangelogOptOutText, isIgnoredByTerms, isIgnoredCommit, isIgnoredFromCommit, listCommitChangedPaths, listCommitsChangedPathsBatch, listFirstParentHeadHistory, monthKeyFromIsoDate, normalizePathForGit, parseNameOnlyChunkMarkerLogStdout, prefillChangelog, readCommitInfo, readCommitsInfoBatch, readRegistry, resolveCommitRef, resolveConfig, runGit, shortHash, sliceCommitsSinceAnchor, verifyChangelog, writeRegistry };
-//# sourceMappingURL=chunk-4JJLHNMU.js.map
-//# sourceMappingURL=chunk-4JJLHNMU.js.map
+export { DEFAULT_JSON_PATH, DEFAULT_MARKDOWN_PATH, DEFAULT_REGISTRY_PATH, buildChangelog, cleanupRegistryStaleRefs, isChangelogOnlyCommit, isChangelogOnlyFromPaths, isChangelogOnlyPath, isChangelogOptOutCommit, isChangelogOptOutFromCommit, isChangelogOptOutText, isIgnoredByTerms, isIgnoredCommit, isIgnoredFromCommit, listCommitChangedPaths, listCommitsChangedPathsBatch, listFirstParentHeadHistory, monthKeyFromIsoDate, normalizePathForGit, parseNameOnlyChunkMarkerLogStdout, prefillChangelog, readCommitInfo, readCommitsInfoBatch, readRegistry, resolveCommitRef, resolveConfig, runGit, runRegistryCleanupAndPersist, shortHash, sliceCommitsSinceAnchor, verifyChangelog, writeRegistry };
+//# sourceMappingURL=chunk-XB2L2E3E.js.map
+//# sourceMappingURL=chunk-XB2L2E3E.js.map

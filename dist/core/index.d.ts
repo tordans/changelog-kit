@@ -83,6 +83,24 @@ declare function parseNameOnlyChunkMarkerLogStdout(stdout: string): Map<string, 
 declare function readRegistry(projectRoot: string, config?: ChangelogKitResolvedConfig): Promise<ChangelogRegistry>;
 declare function writeRegistry(projectRoot: string, registry: ChangelogRegistry, config?: ChangelogKitResolvedConfig): Promise<void>;
 
+type ResolveCommitRef = (ref: string) => Promise<{
+    ref: string;
+    hash: string | null;
+}>;
+type RegistryCleanupStats = {
+    removedStaleRefCount: number;
+    removedEmptyEntryCount: number;
+};
+/**
+ * Removes refs that do not resolve or are outside first-parent HEAD history,
+ * then drops entries with no refs. Mutates `registry` in place.
+ */
+declare function cleanupRegistryStaleRefs(projectRoot: string, registry: ChangelogRegistry, historySet: Set<string>, resolveRef: ResolveCommitRef): Promise<RegistryCleanupStats>;
+/**
+ * Reads the registry, applies stale-ref / empty-entry cleanup, and persists when needed.
+ */
+declare function runRegistryCleanupAndPersist(projectRoot: string, config?: ChangelogKitConfig): Promise<RegistryCleanupStats>;
+
 declare function buildChangelog(projectRoot: string, config?: ChangelogKitConfig): Promise<{
     payload: ChangelogFile;
     wroteJson: boolean;
@@ -97,7 +115,14 @@ type PrefillResult = {
     skippedOptOutCount: number;
     anchorHash: string | null;
 };
-declare function prefillChangelog(projectRoot: string, config?: ChangelogKitConfig): Promise<PrefillResult>;
+type PrefillOptions = {
+    /**
+     * When true, stale-ref / empty-entry cleanup is skipped (for example the `cleanup` phase
+     * already ran in the same CLI invocation).
+     */
+    skipInitialCleanup?: boolean;
+};
+declare function prefillChangelog(projectRoot: string, config?: ChangelogKitConfig, options?: PrefillOptions): Promise<PrefillResult>;
 
 type VerifyResult = {
     checkedNonChangelogCount: number;
@@ -108,4 +133,4 @@ type VerifyResult = {
 };
 declare function verifyChangelog(projectRoot: string, config?: ChangelogKitConfig): Promise<VerifyResult>;
 
-export { type ChangelogKitConfig, type ChangelogKitResolvedConfig, type CommitInfo, type CoverageSlice, DEFAULT_JSON_PATH, DEFAULT_MARKDOWN_PATH, DEFAULT_REGISTRY_PATH, type PrefillResult, type VerifyResult, buildChangelog, isChangelogOnlyCommit, isChangelogOnlyFromPaths, isChangelogOnlyPath, isChangelogOptOutCommit, isChangelogOptOutFromCommit, isChangelogOptOutText, isIgnoredByTerms, isIgnoredCommit, isIgnoredFromCommit, listCommitChangedPaths, listCommitsChangedPathsBatch, listFirstParentHeadHistory, monthKeyFromIsoDate, normalizePathForGit, parseNameOnlyChunkMarkerLogStdout, prefillChangelog, readCommitInfo, readCommitsInfoBatch, readRegistry, resolveCommitRef, resolveConfig, runGit, shortHash, sliceCommitsSinceAnchor, verifyChangelog, writeRegistry };
+export { type ChangelogKitConfig, type ChangelogKitResolvedConfig, type CommitInfo, type CoverageSlice, DEFAULT_JSON_PATH, DEFAULT_MARKDOWN_PATH, DEFAULT_REGISTRY_PATH, type PrefillOptions, type PrefillResult, type RegistryCleanupStats, type ResolveCommitRef, type VerifyResult, buildChangelog, cleanupRegistryStaleRefs, isChangelogOnlyCommit, isChangelogOnlyFromPaths, isChangelogOnlyPath, isChangelogOptOutCommit, isChangelogOptOutFromCommit, isChangelogOptOutText, isIgnoredByTerms, isIgnoredCommit, isIgnoredFromCommit, listCommitChangedPaths, listCommitsChangedPathsBatch, listFirstParentHeadHistory, monthKeyFromIsoDate, normalizePathForGit, parseNameOnlyChunkMarkerLogStdout, prefillChangelog, readCommitInfo, readCommitsInfoBatch, readRegistry, resolveCommitRef, resolveConfig, runGit, runRegistryCleanupAndPersist, shortHash, sliceCommitsSinceAnchor, verifyChangelog, writeRegistry };

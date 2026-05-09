@@ -1,5 +1,9 @@
 #!/usr/bin/env node
+import { readFileSync } from 'fs';
 import path2 from 'path';
+import { fileURLToPath } from 'url';
+import * as p from '@clack/prompts';
+import { intro, select, isCancel, outro } from '@clack/prompts';
 import { spawn } from 'child_process';
 import { writeFile, mkdir, readFile } from 'fs/promises';
 import { z } from 'zod';
@@ -245,7 +249,7 @@ async function isChangelogOnlyCommit(projectRoot, ref, config) {
 }
 function isChangelogOnlyFromPaths(paths, config) {
   if (paths.length === 0) return false;
-  return paths.every((p) => isChangelogOnlyPath(p, config));
+  return paths.every((p2) => isChangelogOnlyPath(p2, config));
 }
 function monthKeyFromIsoDate(isoDate) {
   const d = new Date(isoDate);
@@ -346,7 +350,50 @@ async function writeRegistry(projectRoot, registry, config) {
   await writeFile(abs, yaml, "utf8");
 }
 
-// src/core/build.ts
+// src/core/cleanup.ts
+async function cleanupRegistryStaleRefs(projectRoot, registry, historySet, resolveRef) {
+  let removedStaleRefCount = 0;
+  const entryCountBeforeCleanup = registry.entries.length;
+  const cleanedEntries = await Promise.all(
+    registry.entries.map(async (entry) => {
+      const keepRefs = [];
+      for (const ref of entry.refs) {
+        const resolved = await resolveRef(ref);
+        if (!resolved.hash || !historySet.has(resolved.hash)) {
+          removedStaleRefCount += 1;
+          continue;
+        }
+        keepRefs.push(ref);
+      }
+      return {
+        ...entry,
+        refs: keepRefs
+      };
+    })
+  );
+  registry.entries = cleanedEntries.filter((entry) => entry.refs.length > 0);
+  const removedEmptyEntryCount = entryCountBeforeCleanup - registry.entries.length;
+  return { removedStaleRefCount, removedEmptyEntryCount };
+}
+async function runRegistryCleanupAndPersist(projectRoot, config) {
+  const resolvedConfig = resolveConfig(config);
+  const registry = await readRegistry(projectRoot, resolvedConfig);
+  const history = await listFirstParentHeadHistory(projectRoot);
+  const historySet = new Set(history);
+  const refResolveCache = /* @__PURE__ */ new Map();
+  const resolveRefCached = async (ref) => {
+    const hit = refResolveCache.get(ref);
+    if (hit) return hit;
+    const r = await resolveCommitRef(projectRoot, ref);
+    refResolveCache.set(ref, r);
+    return r;
+  };
+  const stats = await cleanupRegistryStaleRefs(projectRoot, registry, historySet, resolveRefCached);
+  if (stats.removedStaleRefCount > 0 || stats.removedEmptyEntryCount > 0) {
+    await writeRegistry(projectRoot, registry, resolvedConfig);
+  }
+  return stats;
+}
 function normalizeMarkdownBody(markdown) {
   return markdown.trim().replace(/\n{3,}/g, "\n\n");
 }
@@ -472,12 +519,13 @@ function draftDescription(subject, body) {
   return `${cleanSubject}
 ${firstLine}`;
 }
-async function prefillChangelog(projectRoot, config) {
+async function prefillChangelog(projectRoot, config, options) {
   const resolvedConfig = resolveConfig(config);
   const registry = await readRegistry(projectRoot, resolvedConfig);
   const history = await listFirstParentHeadHistory(projectRoot);
   const historySet = new Set(history);
   let removedStaleRefCount = 0;
+  let removedEmptyEntryCount = 0;
   const refResolveCache = /* @__PURE__ */ new Map();
   const resolveRefCached = async (ref) => {
     const hit = refResolveCache.get(ref);
@@ -486,26 +534,16 @@ async function prefillChangelog(projectRoot, config) {
     refResolveCache.set(ref, r);
     return r;
   };
-  const entryCountBeforeCleanup = registry.entries.length;
-  const cleanedEntries = await Promise.all(
-    registry.entries.map(async (entry) => {
-      const keepRefs = [];
-      for (const ref of entry.refs) {
-        const resolved = await resolveRefCached(ref);
-        if (!resolved.hash || !historySet.has(resolved.hash)) {
-          removedStaleRefCount += 1;
-          continue;
-        }
-        keepRefs.push(ref);
-      }
-      return {
-        ...entry,
-        refs: keepRefs
-      };
-    })
-  );
-  registry.entries = cleanedEntries.filter((entry) => entry.refs.length > 0);
-  const removedEmptyEntryCount = entryCountBeforeCleanup - registry.entries.length;
+  if (!options?.skipInitialCleanup) {
+    const cleanupStats = await cleanupRegistryStaleRefs(
+      projectRoot,
+      registry,
+      historySet,
+      resolveRefCached
+    );
+    removedStaleRefCount = cleanupStats.removedStaleRefCount;
+    removedEmptyEntryCount = cleanupStats.removedEmptyEntryCount;
+  }
   const existingRefs = registry.entries.flatMap((entry) => entry.refs);
   const registeredHashes = /* @__PURE__ */ new Set();
   for (const ref of existingRefs) {
@@ -594,8 +632,8 @@ async function verifyChangelog(projectRoot, config) {
   const registry = await readRegistry(projectRoot, resolvedConfig);
   const remediation = [
     `[changelog:verify] Registry file: ${registryAbsPath}`,
-    "[changelog:verify] Next step: bun run changelog:prefill",
-    "[changelog:verify] Then run: bun run changelog:verify"
+    "[changelog:verify] Next step: changelog --cleanup --prefill",
+    "[changelog:verify] Then run: changelog --validate"
   ];
   const resolvedRows = [];
   for (let entryIndex = 0; entryIndex < registry.entries.length; entryIndex += 1) {
@@ -709,20 +747,71 @@ async function verifyChangelog(projectRoot, config) {
 }
 
 // src/cli/args.ts
+var KNOWN_FLAG_KEYS = /* @__PURE__ */ new Set([
+  "cleanup",
+  "prefill",
+  "validate",
+  "generate",
+  "prefill-cleanup",
+  "validate-generate",
+  "non-interactive",
+  "ci",
+  "quiet",
+  "json",
+  "no-color",
+  "help",
+  "version",
+  "project-root",
+  "registry-path",
+  "output-json-path",
+  "output-markdown-path",
+  "changelog-only-path",
+  "ignore-commit-term"
+]);
+var SINGLETON_STRING_FLAGS = /* @__PURE__ */ new Set([
+  "project-root",
+  "registry-path",
+  "output-json-path",
+  "output-markdown-path"
+]);
+var BOOLEAN_FLAGS = /* @__PURE__ */ new Set([
+  "cleanup",
+  "prefill",
+  "validate",
+  "generate",
+  "prefill-cleanup",
+  "validate-generate",
+  "non-interactive",
+  "ci",
+  "quiet",
+  "json",
+  "no-color",
+  "help",
+  "version"
+]);
 function readRawArgs(argv) {
   const map = /* @__PURE__ */ new Map();
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
     if (!token.startsWith("--")) {
-      continue;
+      throw new Error(`Unexpected argument "${token}". Only long-form --flags are supported.`);
     }
     const key = token.slice(2);
+    if (!KNOWN_FLAG_KEYS.has(key)) {
+      throw new Error(`Unknown flag --${key}. Run changelog --help for usage.`);
+    }
     const next = argv[i + 1];
-    if (!next || next.startsWith("--")) {
+    if (BOOLEAN_FLAGS.has(key)) {
+      if (next && !next.startsWith("--")) {
+        throw new Error(`Flag --${key} does not take a value; remove "${next}".`);
+      }
       const list2 = map.get(key) ?? [];
       list2.push("true");
       map.set(key, list2);
       continue;
+    }
+    if (!next || next.startsWith("--")) {
+      throw new Error(`Flag --${key} requires a value.`);
     }
     const list = map.get(key) ?? [];
     list.push(next);
@@ -731,8 +820,33 @@ function readRawArgs(argv) {
   }
   return map;
 }
-function parseCliContext(argv) {
+function assertSingleton(key, values) {
+  if (values && values.length > 1) {
+    throw new Error(`Flag --${key} was provided multiple times.`);
+  }
+}
+function hasFlag(args, key) {
+  return (args.get(key)?.length ?? 0) > 0;
+}
+function resolvePhasesFromFlags(args) {
+  const cleanup = hasFlag(args, "cleanup") || hasFlag(args, "prefill-cleanup");
+  const prefill = hasFlag(args, "prefill") || hasFlag(args, "prefill-cleanup");
+  const validate = hasFlag(args, "validate") || hasFlag(args, "validate-generate");
+  const generate = hasFlag(args, "generate") || hasFlag(args, "validate-generate");
+  return { cleanup, prefill, validate, generate };
+}
+function canonicalPhaseList(phases) {
+  const order = ["cleanup", "prefill", "validate", "generate"];
+  return order.filter((p2) => phases[p2]);
+}
+function parseChangelogCliArgv(argv) {
   const args = readRawArgs(argv);
+  for (const key of BOOLEAN_FLAGS) {
+    assertSingleton(key, args.get(key));
+  }
+  for (const key of SINGLETON_STRING_FLAGS) {
+    assertSingleton(key, args.get(key));
+  }
   const projectRoot = args.get("project-root")?.at(-1) ?? process.cwd();
   const config = {
     registryPath: args.get("registry-path")?.at(-1),
@@ -741,9 +855,284 @@ function parseCliContext(argv) {
     changelogOnlyPaths: args.get("changelog-only-path"),
     ignoredCommitTerms: args.get("ignore-commit-term")
   };
-  return { projectRoot, config };
+  const phases = resolvePhasesFromFlags(args);
+  const runtime = {
+    nonInteractive: hasFlag(args, "non-interactive"),
+    ci: hasFlag(args, "ci"),
+    quiet: hasFlag(args, "quiet"),
+    json: hasFlag(args, "json"),
+    noColor: hasFlag(args, "no-color"),
+    help: hasFlag(args, "help"),
+    version: hasFlag(args, "version")
+  };
+  return { projectRoot, config, phases, runtime };
+}
+function anyPhaseSelected(phases) {
+  return phases.cleanup || phases.prefill || phases.validate || phases.generate;
 }
 
-export { buildChangelog, parseCliContext, prefillChangelog, resolveConfig, shortHash, verifyChangelog };
-//# sourceMappingURL=chunk-3ZRK5GL6.js.map
-//# sourceMappingURL=chunk-3ZRK5GL6.js.map
+// src/cli/changelog.ts
+function readPackageVersion() {
+  const pkgPath = path2.join(
+    path2.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "..",
+    "package.json"
+  );
+  const raw = readFileSync(pkgPath, "utf8");
+  return JSON.parse(raw).version;
+}
+function printHelp() {
+  console.log(`changelog-kit \u2014 unified changelog CLI
+
+Usage:
+  changelog [flags]
+  changelog --cleanup --prefill --validate --generate
+
+Phase flags (compose any subset; execution order is always):
+  cleanup \u2192 prefill \u2192 validate \u2192 generate (flag order does not matter)
+
+  --cleanup              Remove stale refs and empty registry entries
+  --prefill              Add draft entries for missing commits (includes cleanup unless --cleanup ran earlier in the same run)
+  --validate             Verify registry coverage and consistency
+  --generate             Write CHANGELOG.md and changelog JSON
+
+Aliases:
+  --prefill-cleanup      Same as --cleanup --prefill
+  --validate-generate    Same as --validate --generate
+
+Config (same as before):
+  --project-root <dir>
+  --registry-path <file>
+  --output-json-path <file>
+  --output-markdown-path <file>
+  --changelog-only-path <path>   (repeatable)
+  --ignore-commit-term <term>      (repeatable)
+
+Runtime:
+  --non-interactive      Error if no phases are selected (no prompts)
+  --ci                   Implies stable, non-interactive behavior
+  --quiet                Less console output (human mode only)
+  --json                 Print one JSON summary object to stdout at the end
+  --no-color             Disable ANSI colors
+  --help
+  --version
+
+Examples:
+  changelog --validate
+  changelog --validate --generate
+  changelog --cleanup --prefill --validate
+  changelog --non-interactive --ci --validate --generate
+`);
+}
+function mapMenuChoiceToPhases(choice) {
+  switch (choice) {
+    case "prefill+cleanup":
+      return { cleanup: true, prefill: true, validate: false, generate: false };
+    case "validate+generate":
+      return { cleanup: false, prefill: false, validate: true, generate: true };
+    case "validate+cleanup":
+      return { cleanup: true, prefill: false, validate: true, generate: false };
+    case "cleanup-only":
+      return { cleanup: true, prefill: false, validate: false, generate: false };
+    default:
+      return { cleanup: false, prefill: false, validate: false, generate: false };
+  }
+}
+async function main() {
+  let parsed;
+  try {
+    parsed = parseChangelogCliArgv(process.argv.slice(2));
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+    return;
+  }
+  const { projectRoot, config, phases, runtime } = parsed;
+  if (runtime.noColor) {
+    process.env["NO_COLOR"] = "1";
+    process.env["FORCE_COLOR"] = "0";
+  }
+  if (runtime.help) {
+    printHelp();
+    return;
+  }
+  if (runtime.version) {
+    console.log(readPackageVersion());
+    return;
+  }
+  const mustAvoidPrompts = runtime.nonInteractive || runtime.ci;
+  const canPrompt = process.stdin.isTTY && process.stdout.isTTY && !mustAvoidPrompts;
+  let selectedPhases = { ...phases };
+  let usedInteractiveMenu = false;
+  if (!anyPhaseSelected(selectedPhases)) {
+    if (!canPrompt) {
+      console.error(
+        "changelog: no phases selected. Pass --cleanup, --prefill, --validate, and/or --generate (see changelog --help)."
+      );
+      process.exit(1);
+      return;
+    }
+    usedInteractiveMenu = true;
+    intro("changelog-kit");
+    const choice = await select({
+      message: "What should changelog-kit run?",
+      options: [
+        {
+          value: "prefill+cleanup",
+          label: "Prefill + cleanup",
+          hint: "clean registry and draft missing entries"
+        },
+        {
+          value: "validate+generate",
+          label: "Validate + generate",
+          hint: "verify registry then build outputs"
+        },
+        {
+          value: "validate+cleanup",
+          label: "Validate + cleanup",
+          hint: "verify then prune stale refs"
+        },
+        {
+          value: "cleanup-only",
+          label: "Cleanup only",
+          hint: "remove stale refs and empty entries"
+        }
+      ]
+    });
+    if (isCancel(choice)) {
+      process.exit(0);
+      return;
+    }
+    selectedPhases = mapMenuChoiceToPhases(choice);
+  }
+  const order = canonicalPhaseList(selectedPhases);
+  const ranCleanupThisRun = order.includes("cleanup");
+  const humanLog = (msg) => {
+    if (runtime.json) return;
+    if (runtime.quiet) return;
+    p.log.info(msg);
+  };
+  const summary = {
+    phases: order,
+    version: readPackageVersion(),
+    steps: {}
+  };
+  const resolved = resolveConfig(config);
+  const registryAbsPath = path2.join(projectRoot, resolved.registryPath);
+  const runPhase = async (phase) => {
+    if (phase === "cleanup") {
+      const stats = await runRegistryCleanupAndPersist(projectRoot, config);
+      summary.steps.cleanup = {
+        removedStaleRefCount: stats.removedStaleRefCount,
+        removedEmptyEntryCount: stats.removedEmptyEntryCount
+      };
+      humanLog(`[changelog-kit:cleanup] Registry file: ${registryAbsPath}`);
+      if (stats.removedStaleRefCount > 0) {
+        humanLog(`[changelog-kit:cleanup] Removed ${stats.removedStaleRefCount} stale refs.`);
+      }
+      if (stats.removedEmptyEntryCount > 0) {
+        humanLog(
+          `[changelog-kit:cleanup] Removed ${stats.removedEmptyEntryCount} registry entries that became empty.`
+        );
+      }
+      if (stats.removedStaleRefCount === 0 && stats.removedEmptyEntryCount === 0) {
+        humanLog("[changelog-kit:cleanup] Registry already clean (no stale refs or empty entries).");
+      }
+      return;
+    }
+    if (phase === "prefill") {
+      const result = await prefillChangelog(projectRoot, config, {
+        skipInitialCleanup: ranCleanupThisRun
+      });
+      summary.steps.prefill = {
+        addedEntries: result.addedEntries.length,
+        removedStaleRefCount: result.removedStaleRefCount,
+        removedEmptyEntryCount: result.removedEmptyEntryCount,
+        skippedChangelogOnlyCount: result.skippedChangelogOnlyCount,
+        skippedIgnoredCount: result.skippedIgnoredCount,
+        skippedOptOutCount: result.skippedOptOutCount,
+        anchorHash: result.anchorHash
+      };
+      humanLog(`[changelog-kit:prefill] Registry file: ${registryAbsPath}`);
+      if (result.addedEntries.length === 0) {
+        humanLog("[changelog-kit:prefill] No missing commits. Registry already covers this range.");
+        if (result.anchorHash) {
+          humanLog(`[changelog-kit:prefill] Anchor ref found at ${shortHash(result.anchorHash)}.`);
+        }
+      } else {
+        humanLog(`[changelog-kit:prefill] Added ${result.addedEntries.length} entries.`);
+      }
+      if (result.skippedChangelogOnlyCount > 0) {
+        humanLog(
+          `[changelog-kit:prefill] Skipped ${result.skippedChangelogOnlyCount} changelog-only commits.`
+        );
+      }
+      if (result.skippedIgnoredCount > 0) {
+        humanLog(
+          `[changelog-kit:prefill] Skipped ${result.skippedIgnoredCount} commits matching configured ignore terms.`
+        );
+      }
+      if (result.skippedOptOutCount > 0) {
+        humanLog(
+          `[changelog-kit:prefill] Skipped ${result.skippedOptOutCount} commits with changelog opt-out terms (no-changelog / no changelog / hide changelog).`
+        );
+      }
+      if (result.removedStaleRefCount > 0) {
+        humanLog(`[changelog-kit:prefill] Removed ${result.removedStaleRefCount} stale refs.`);
+      }
+      if (result.removedEmptyEntryCount > 0) {
+        humanLog(
+          `[changelog-kit:prefill] Removed ${result.removedEmptyEntryCount} registry entries that became empty.`
+        );
+      }
+      humanLog(
+        "[changelog-kit:prefill] Next step: edit registry entries, then run changelog --validate --generate"
+      );
+      return;
+    }
+    if (phase === "validate") {
+      const result = await verifyChangelog(projectRoot, config);
+      summary.steps.validate = {
+        checkedNonChangelogCount: result.checkedNonChangelogCount,
+        skippedChangelogOnlyCount: result.skippedChangelogOnlyCount,
+        skippedIgnoredCount: result.skippedIgnoredCount,
+        skippedOptOutCount: result.skippedOptOutCount,
+        anchorHash: result.anchorHash
+      };
+      humanLog(`[changelog-kit:validate] Registry file: ${registryAbsPath}`);
+      if (result.anchorHash) {
+        humanLog(
+          `[changelog-kit:validate] OK. Checked ${result.checkedNonChangelogCount} commits since ${shortHash(result.anchorHash)} (${result.skippedChangelogOnlyCount} changelog-only commits skipped, ${result.skippedIgnoredCount} ignored commits skipped, ${result.skippedOptOutCount} opt-out commits skipped).`
+        );
+      } else {
+        humanLog(
+          `[changelog-kit:validate] OK. Checked ${result.checkedNonChangelogCount} commits from HEAD (${result.skippedChangelogOnlyCount} changelog-only commits skipped, ${result.skippedIgnoredCount} ignored commits skipped, ${result.skippedOptOutCount} opt-out commits skipped).`
+        );
+      }
+      return;
+    }
+    if (phase === "generate") {
+      const { wroteJson } = await buildChangelog(projectRoot, config);
+      summary.steps.generate = { wroteJson };
+      humanLog(`[changelog-kit:generate] Registry file: ${registryAbsPath}`);
+      humanLog(
+        wroteJson ? `[changelog-kit:generate] Wrote ${resolved.outputMarkdownPath} and ${resolved.outputJsonPath}.` : `[changelog-kit:generate] Wrote ${resolved.outputMarkdownPath}; kept ${resolved.outputJsonPath} unchanged (timestamp-only diff).`
+      );
+    }
+  };
+  for (const phase of order) {
+    await runPhase(phase);
+  }
+  if (runtime.json) {
+    console.log(JSON.stringify(summary));
+  } else if (usedInteractiveMenu) {
+    outro("Done.");
+  }
+}
+void main().catch((err) => {
+  console.error(err instanceof Error ? err.message : String(err));
+  process.exit(1);
+});
+//# sourceMappingURL=changelog.js.map
+//# sourceMappingURL=changelog.js.map
