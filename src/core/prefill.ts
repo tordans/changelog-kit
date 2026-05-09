@@ -1,18 +1,29 @@
 import type { ChangelogRegistryEntry } from '../schemas'
 import {
-  isIgnoredCommit,
-  isChangelogOnlyCommit,
-  isChangelogOptOutCommit,
+  isChangelogOnlyFromPaths,
+  isIgnoredFromCommit,
+  isChangelogOptOutFromCommit,
   shortHash,
   sliceCommitsSinceAnchor,
 } from './changelog'
 import type { ChangelogKitConfig } from './config'
 import { resolveConfig } from './config'
-import { listFirstParentHeadHistory, readCommitInfo, resolveCommitRef } from './git'
+import type { CommitInfo } from './git'
+import {
+  listCommitsChangedPathsBatch,
+  listCommitChangedPaths,
+  listFirstParentHeadHistory,
+  readCommitsInfoBatch,
+  readCommitInfo,
+  resolveCommitRef,
+} from './git'
 import { readRegistry, writeRegistry } from './registry'
 
 const HIDE_TERMS = ['chore', 'lint', 'autoformat']
 const VISIBLE_HINT_TERMS = ['feature', 'improve']
+
+/** Balance fewer git subprocesses vs stdout size / parse cost. */
+const PREFILTER_BATCH_SIZE = 128
 
 function shouldHideFromSubject(subject: string): boolean {
   const lower = subject.toLowerCase()
@@ -57,12 +68,21 @@ export async function prefillChangelog(
   const historySet = new Set(history)
   let removedStaleRefCount = 0
 
+  const refResolveCache = new Map<string, { ref: string; hash: string | null }>()
+  const resolveRefCached = async (ref: string) => {
+    const hit = refResolveCache.get(ref)
+    if (hit) return hit
+    const r = await resolveCommitRef(projectRoot, ref)
+    refResolveCache.set(ref, r)
+    return r
+  }
+
   const entryCountBeforeCleanup = registry.entries.length
   const cleanedEntries = await Promise.all(
     registry.entries.map(async (entry) => {
       const keepRefs: string[] = []
       for (const ref of entry.refs) {
-        const resolved = await resolveCommitRef(projectRoot, ref)
+        const resolved = await resolveRefCached(ref)
         if (!resolved.hash || !historySet.has(resolved.hash)) {
           removedStaleRefCount += 1
           continue
@@ -80,7 +100,7 @@ export async function prefillChangelog(
   const existingRefs = registry.entries.flatMap((entry) => entry.refs)
   const registeredHashes = new Set<string>()
   for (const ref of existingRefs) {
-    const resolved = await resolveCommitRef(projectRoot, ref)
+    const resolved = await resolveRefCached(ref)
     if (resolved.hash) {
       registeredHashes.add(resolved.hash)
     }
@@ -94,25 +114,50 @@ export async function prefillChangelog(
   let skippedIgnoredCount = 0
   let skippedOptOutCount = 0
 
-  for (const hash of orderedMissing) {
-    if (await isChangelogOnlyCommit(projectRoot, hash, resolvedConfig)) {
-      skippedChangelogOnlyCount += 1
-      continue
+  const commitInfoCache = new Map<string, CommitInfo>()
+
+  for (let offset = 0; offset < orderedMissing.length; offset += PREFILTER_BATCH_SIZE) {
+    const slice = orderedMissing.slice(offset, offset + PREFILTER_BATCH_SIZE)
+    const uniq = [...new Set(slice)]
+    const [pathsByHash, infoByHash] = await Promise.all([
+      listCommitsChangedPathsBatch(projectRoot, uniq),
+      readCommitsInfoBatch(projectRoot, uniq),
+    ])
+
+    for (const hash of slice) {
+      let paths = pathsByHash.get(hash)
+      if (paths === undefined) {
+        paths = await listCommitChangedPaths(projectRoot, hash)
+      }
+
+      if (isChangelogOnlyFromPaths(paths, resolvedConfig)) {
+        skippedChangelogOnlyCount += 1
+        continue
+      }
+
+      let commit = infoByHash.get(hash)
+      if (!commit) {
+        commit = await readCommitInfo(projectRoot, hash)
+      }
+
+      if (isIgnoredFromCommit(commit, resolvedConfig)) {
+        skippedIgnoredCount += 1
+        continue
+      }
+      if (isChangelogOptOutFromCommit(commit)) {
+        skippedOptOutCount += 1
+        continue
+      }
+
+      const canonicalHash = commit.hash
+      commitInfoCache.set(canonicalHash, commit)
+      missingNonChangelogCommits.push(canonicalHash)
     }
-    if (await isIgnoredCommit(projectRoot, hash, resolvedConfig)) {
-      skippedIgnoredCount += 1
-      continue
-    }
-    if (await isChangelogOptOutCommit(projectRoot, hash)) {
-      skippedOptOutCount += 1
-      continue
-    }
-    missingNonChangelogCommits.push(hash)
   }
 
   const addedEntries: ChangelogRegistryEntry[] = []
   for (const hash of missingNonChangelogCommits) {
-    const commit = await readCommitInfo(projectRoot, hash)
+    const commit = commitInfoCache.get(hash) ?? (await readCommitInfo(projectRoot, hash))
     if (shouldHideFromSubject(commit.subject)) {
       const entry: ChangelogRegistryEntry = {
         refs: [shortHash(commit.hash)],

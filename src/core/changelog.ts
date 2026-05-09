@@ -16,6 +16,11 @@ export function isIgnoredByTerms(text: string, ignoredTerms: string[]): boolean 
 
 export async function isChangelogOptOutCommit(projectRoot: string, ref: string): Promise<boolean> {
   const commit = await readCommitInfo(projectRoot, ref)
+  return isChangelogOptOutFromCommit(commit)
+}
+
+/** Prefer this when metadata is already loaded (avoids extra `git show` calls). */
+export function isChangelogOptOutFromCommit(commit: { subject: string; body: string }): boolean {
   const combined = `${commit.subject}\n${commit.body}`
   return isChangelogOptOutText(combined)
 }
@@ -26,10 +31,17 @@ export async function isIgnoredCommit(
   config?: ChangelogKitResolvedConfig,
 ): Promise<boolean> {
   const resolved = config ?? resolveConfig()
-  if (resolved.ignoredCommitTerms.length === 0) return false
   const commit = await readCommitInfo(projectRoot, ref)
+  return isIgnoredFromCommit(commit, resolved)
+}
+
+export function isIgnoredFromCommit(
+  commit: { subject: string; body: string },
+  config: ChangelogKitResolvedConfig,
+): boolean {
+  if (config.ignoredCommitTerms.length === 0) return false
   const combined = `${commit.subject}\n${commit.body}`
-  return isIgnoredByTerms(combined, resolved.ignoredCommitTerms)
+  return isIgnoredByTerms(combined, config.ignoredCommitTerms)
 }
 
 export function isChangelogOnlyPath(relPath: string, config?: ChangelogKitResolvedConfig): boolean {
@@ -43,6 +55,13 @@ export async function isChangelogOnlyCommit(
   config?: ChangelogKitResolvedConfig,
 ): Promise<boolean> {
   const paths = await listCommitChangedPaths(projectRoot, ref)
+  return isChangelogOnlyFromPaths(paths, config ?? resolveConfig())
+}
+
+export function isChangelogOnlyFromPaths(
+  paths: string[],
+  config: ChangelogKitResolvedConfig,
+): boolean {
   if (paths.length === 0) return false
   return paths.every((p) => isChangelogOnlyPath(p, config))
 }

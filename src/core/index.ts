@@ -10,9 +10,12 @@ export {
 export {
   isIgnoredByTerms,
   isIgnoredCommit,
+  isIgnoredFromCommit,
   isChangelogOnlyCommit,
+  isChangelogOnlyFromPaths,
   isChangelogOnlyPath,
   isChangelogOptOutCommit,
+  isChangelogOptOutFromCommit,
   isChangelogOptOutText,
   monthKeyFromIsoDate,
   shortHash,
@@ -21,8 +24,11 @@ export {
 } from './changelog'
 export {
   listCommitChangedPaths,
+  listCommitsChangedPathsBatch,
   listFirstParentHeadHistory,
+  parseNameOnlyChunkMarkerLogStdout,
   readCommitInfo,
+  readCommitsInfoBatch,
   resolveCommitRef,
   runGit,
   type CommitInfo,

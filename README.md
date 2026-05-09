@@ -62,6 +62,11 @@ Shared flags:
   Skips commits whose message contains the given term (case-insensitive).
   > Default: not set
 
+## Development
+
+- `bun test` runs unit checks (predicate semantics, git stdout parsing).
+- `bun run bench:prefill` prints a coarse wall-clock time for `prefillChangelog` on the repo in `process.cwd()` (creates a disposable empty registry next to `--registry-path`). Compare against an older checkout with `hyperfine 'bun run bench:prefill'` or `git worktree`.
+
 ## Shared Agent Skill
 
 This package also ships a reusable agent skill at `.cursor/skills/changelog-update/SKILL.md`.

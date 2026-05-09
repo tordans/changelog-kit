@@ -44,6 +44,7 @@
     }
   },
   "scripts": {
+    "bench:prefill": "bun run scripts/benchmark-prefill.ts",
     "build": "tsup && bun run build:styles",
     "build:styles": "tailwindcss -i ./src/react/styles.css -o ./dist/react/styles.css --minify",
     "check": "bun run format:check && bun run lint && bun run typecheck",
@@ -51,6 +52,7 @@
     "format:check": "oxfmt -c oxfmt.config.mjs --check .",
     "lint": "oxlint -c oxlint.config.mjs .",
     "prepare": "husky",
+    "test": "bun test",
     "typecheck": "tsgo --noEmit",
     "verify:dist": "bun run build && git diff --quiet -- dist || (echo 'dist is out of date. Run bun run build and commit dist.' && exit 1)"
   },
